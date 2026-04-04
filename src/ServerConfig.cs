@@ -1,0 +1,409 @@
+// ServerConfig.cs
+// Unified server-side configuration for CompetitiveAdjustments.
+// Nested JSON: { "ConfigVersion": 10, "Dashfall": { ... }, "CompAdjust": { ... }, "CompTweaks": { ... } }
+// Uses JsonUtility with comment-stripping (DashFall pattern).
+
+using System;
+using System.IO;
+using System.Text.RegularExpressions;
+using UnityEngine;
+
+namespace CompetitiveAdjustments
+{
+    [Serializable]
+    public class DashfallConfig
+    {
+        public bool EnableDebugLogs = false;
+
+        // --- Dash Settings ---
+        public bool EnableGoalieScaling = true;
+        public float GoalieDashForceScale = 0.7f;
+        public float GoalieDashStaminaScale = 0.6f;
+        public float GoalieBaseStandingDashCooldown = 0.2f;
+
+        // --- Dive Settings ---
+        public float DiveVelocity = 1.5f;
+        public float DiveTorque = 12.1f;
+        public float MinStaminaForDive_Skater = 0.7f;
+        public float DiveAutoClearIfNoFallSeconds = 1.0f;
+        public float MinAxis = 0.350f;
+        public bool EnableDiveFallenDrag = true;
+        public float DiveFallenDragAmount = 0.5f;
+
+        // --- Slide / Twist Settings ---
+        public float SlideInfluenceForce = 100.0f;
+        public float SlideInfluenceMaxSpeed = 4.47f;
+        public float SlideInfluenceStaminaCostPerSecond = 0f;
+        public float SlideInfluenceMinStamina = 0.0f;
+        public float SlideTwistForceScale = 1.0f;
+
+        // --- Feature Flags ---
+        public bool SkaterDashEnabled = false;
+        public bool SkaterDiveEnabled = true;
+        public bool EnableTwistWhileSliding = true;
+        public bool EnableSlideInfluence = true;
+        public bool GoalieDiveEnabled = true;
+        public bool GoalieTwistWhileSlidingEnabled = false;
+        public bool GoalieSlideInfluenceEnabled = false;
+        public bool GoalieStandingDashEnabled = true;
+        public bool GoalieDashExtendEnabled = true;
+        public float GoalieDashExtendMinSpeedForExtend = 1f;
+        public float GoalieDashExtendMaxSpeedForExtend = 2f;
+        public float GoalieDashExtendCurvePower = 1.5f;
+        public bool GoalieStancesEnabled = true;
+        public bool GoalieSlidingReachReduction = false;
+        public float GoalieSlidingReachScale = 0.75f; // default reach scale when sliding
+
+    }
+
+    [Serializable]
+    public class CompAdjustConfig
+    {
+        public bool SprintShoulderTrailEnabled = true;
+        public bool EnableCustomSkaterTorsoModel = false;
+        public float CustomTorsoScaleX = 1f;
+        public float CustomTorsoScaleY = 1f;
+        public float CustomTorsoScaleZ = 1f;
+        public bool DisableCustomTorsoVisual = false;
+        public bool EnableGoalNetTweaks = false;
+        public float GoalThicknessScale = 1f;
+        public float GoalSizeScaleX = 1f;
+        public float GoalSizeScaleY = 1f;
+        public float GoalSizeScaleZ = 1f;
+        public float GoalBackOffset = 0f;
+        public bool EnableArenaTweaks = false;
+        public float ArenaScaleX = 1f;
+        public float ArenaScaleY = 1f;
+        public float ArenaScaleZ = 1f;
+        public float ArenaOffsetX = 0f;
+        public float ArenaOffsetY = 0.0102f;
+        public float ArenaOffsetZ = 0f;
+        public float ArenaRotX = 90f;
+        public float ArenaRotY = 180f;
+        public float ArenaRotZ = 0f;
+    }
+
+    [Serializable]
+    public class CompTweaksConfig
+    {
+        // --- Movement ---
+        public float TurnAccelerationBase = 1.825f;
+        public float TurnBrakeAccelerationBase = 5.8f;
+        public float TurnMaxSpeedBase = 1.48f;
+        public float TurnAccelerationScaling = 0f;
+        public float TurnBrakeAccelerationScaling = 0f;
+        public float TurnMaxSpeedScaling = 0f;
+        public float TurnDrag = 3f;
+        public float GoalieTurnAcceleration = 1.825f;
+        public float GoalieTurnBrakeAcceleration = 5.8f;
+        public float GoalieTurnMaxSpeed = 1.48f;
+        public float GoalieTurnDrag = 3f;
+        public float MaxBackwardsSpeed = 7.5f;
+        public float MaxBackwardsSprintSpeed = 8.75f;
+        public float GoalieMaxForwardsSpeed = 5f;
+        public float GoalieMaxForwardsSprintSpeed = 6f;
+        public float GoalieMaxBackwardsSpeed = 5f;
+        public float GoalieMaxBackwardsSprintSpeed = 6f;
+        public float AngularForceMultiplier = 5.1f;
+        public float ForwardsAccelerationBase = 2f;
+        public float ForwardsSprintAccelerationBase = 4.75f;
+        public float ForwardsAccelerationMin = 2f;
+        public float ForwardsSprintAccelerationMin = 4f;
+        public float BackwardsAccelerationBase = 1.8f;
+        public float BackwardsAccelerationMin = 1.8f;
+        public float BackwardsSprintAccelerationBase = 2f;
+        public float BackwardsSprintAccelerationMin = 2f;
+        public float ForwardsAccelerationScaling = 0;
+        public float ForwardsSprintAccelerationScaling = 0;
+        public float BackwardsAccelerationScaling = 0;
+        public float BackwardsSprintAccelerationScaling = 0;
+        public float MaxForwardsSpeed = 7.5f;
+        public float MaxForwardsSprintSpeed = 8.75f;
+        public float PostSlideTurnTime = 0.35f;
+        public float PostSlideTurnMax = 1.75f;
+        public float PostSlideTurnAcceleration = 2.5f;
+        public float PostSlideBrakeAcceleration = 8f;
+
+        // --- Player Body ---
+        public float SlideTurnMultiplier = 2f;
+        public float StopDrag = 2.5f;
+        public float BalanceRecoveryTime = 2f;
+        public float GoalieDashSpeedLimit = 2.5f;
+        public bool EnableGoalieMicrodash = false;
+        public float MicrodashStamCostFraction = 0.75f;
+        public bool EnableSmallerModels = false;
+        public float TorsoColliderRadiusFactor = 1f;
+        public float HeadColliderRadiusFactor = 1f;
+        public float PlayerColliderBounciness = 0.05f;
+        public float SlideDrag = 0.2f;
+        public float CenterSpawnOffset = 1.8f;
+        public float TackleSpeedThreshold = 7.6f;
+        public float TackleForceThreshold = 7f;
+        public float TackleForceMultiplier = 0.3f;
+        public bool ThinSkaterBodies = false;
+        public float SkaterThinningFactor = 0.5f;
+        public float ButterflyPadOffset = 0f;
+
+        // --- Puck ---
+        public float PuckMaxSpeed = 50f;
+        public float PuckStickTensorX = 0.006f;
+        public float PuckStickTensorY = 0.002f;
+        public float PuckStickTensorZ = 0.006f;
+        public float PuckScale = 0.92f;
+        public float PuckDrag = 0.3f;
+        public float PuckMass = 0.375f;
+        public bool RandomPuckDrop = true;
+        public bool EnablePuckThroughBodies = true;
+        public bool EnablePuckThroughGroin = true;
+        public bool PuckDragSpeedDependence = true;
+        public float PuckNominalSpeed = 20f;
+        public float PuckDragFactor = 0.0014f;
+        public bool PuckHeightDependentDrag = false;
+        public float PuckHeightLimit = 2f;
+        public float PuckHeightDragFactor = 0f;
+
+        // --- Stick ---
+        public bool DisableStickCollision = false;
+        public bool DisableShaftCollision = false;
+        public bool EnableMidStickCollider = false;
+        public float StickMass = 1f;
+        public bool AlterStickPositionerOutput = true;
+        public float ShaftHandleProportionalGain = 500f;
+        public float StickPositionerOutputMax = 1250f;
+        public float GoaliePositionerOutputMax = 1200f;
+        public float StickOnPuckInverseMass = 1f;
+        public bool EnableStickSpeedDecay = true;
+        public int StickSpeedDecaySpan = 75;
+        public float StickSpeedDecayLimit = 22f;
+        public float StickSpeedDecayRate = 6f;
+        public float StickSpeedDecayMin = 500;
+        public float SoftCollisionForce = 20f;
+        public float BladeTargetFocusPointOffsetY = 0f;
+
+        // --- Arena ---
+        public float postBounciness = 0f;
+        public bool EnableSoftBoards = true;
+        public float BoardBounciness = 0.19f;
+        public float BoardFriction = 0.1f;
+        public float BoardSoftness = 0.5f;
+
+        // --- Physics ---
+        public float FixedDeltaTime = 0.01f;
+        public int SolverIterations = 6;
+        public bool UsePhysicsModificationEvents = true;
+        public bool EnableJohnBoardBounceTweak = false;
+        public float JohnBoardBounceLinearReduction = 0.15f;
+        public float JohnBoardBounceDefaultForce = 1f;
+
+        // --- Misc ---
+        public bool OpenConfigChanges = false;
+        public bool BananaMode = false;
+    }
+
+    [Serializable]
+    public class ServerConfig
+    {
+        public int ConfigVersion = 10;
+        public DashfallConfig Dashfall = new DashfallConfig();
+        public CompAdjustConfig CompAdjust = new CompAdjustConfig();
+        public CompTweaksConfig CompTweaks = new CompTweaksConfig();
+    }
+
+    public static class ConfigManager
+    {
+        public static ServerConfig Config { get; private set; } = new ServerConfig();
+
+        private static string ConfigDir
+        {
+            get
+            {
+                string gameRoot = Application.dataPath;
+                if (gameRoot.EndsWith("Puck_Data"))
+                    gameRoot = Directory.GetParent(gameRoot).FullName;
+
+                string folder = Path.Combine(gameRoot, "config");
+                if (!Directory.Exists(folder))
+                    Directory.CreateDirectory(folder);
+                return folder;
+            }
+        }
+
+        private static string ConfigFile => Path.Combine(ConfigDir, "CompetitiveAdjustments.json");
+        private const int CONFIG_VERSION = 10;
+
+        public static void EnsureConfig()
+        {
+            if (!Directory.Exists(ConfigDir)) Directory.CreateDirectory(ConfigDir);
+
+            if (File.Exists(ConfigFile))
+            {
+                try
+                {
+                    string existing = File.ReadAllText(ConfigFile);
+                    // Detect old flat format (doesn't have nested section headers)
+                    bool isNested = existing.Contains("\"Dashfall\"") || existing.Contains("\"CompTweaks\"");
+                    if (!isNested)
+                    {
+                        string ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                        File.Copy(ConfigFile, Path.Combine(ConfigDir, $"CompetitiveAdjustments_{ts}_old.json"));
+                        WriteConfig(new ServerConfig());
+                    }
+                    else
+                    {
+                        bool missingGoalieReachFields =
+                            !existing.Contains("\"GoalieSlidingReachReduction\"") ||
+                            !existing.Contains("\"GoalieSlidingReachScale\"");
+                        bool missingTorsoXYZFields =
+                            !existing.Contains("\"CustomTorsoScaleX\"") ||
+                            !existing.Contains("\"DisableCustomTorsoVisual\"");
+                        bool missingCompAdjustSection = !existing.Contains("\"CompAdjust\"");
+                        bool outdatedVersion = !Regex.IsMatch(existing, $"\"ConfigVersion\"\\s*:\\s*{CONFIG_VERSION}");
+
+                        if (missingGoalieReachFields || missingTorsoXYZFields || missingCompAdjustSection || outdatedVersion)
+                        {
+                            ReloadConfig();
+                            WriteConfig(Config ?? new ServerConfig());
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning("[COMPADJUST] Error upgrading config: " + ex.Message);
+                }
+            }
+            else
+            {
+                WriteConfig(new ServerConfig());
+            }
+        }
+
+        // Write each sub-section via JsonUtility (flat serialization per section)
+        // then stitch into a nested JSON file.
+        private static void WriteConfig(ServerConfig cfg)
+        {
+            cfg.ConfigVersion = CONFIG_VERSION;
+            string dashfallJson = JsonUtility.ToJson(cfg.Dashfall, true);
+            string compAdjustJson = JsonUtility.ToJson(cfg.CompAdjust, true);
+            string compTweaksJson = JsonUtility.ToJson(cfg.CompTweaks, true);
+
+            // Indent sub-section lines by 2 spaces
+            string IndentBlock(string json)
+            {
+                var lines = json.Split('\n');
+                for (int i = 1; i < lines.Length; i++)
+                    lines[i] = "  " + lines[i];
+                return string.Join("\n", lines);
+            }
+
+            string content = $"{{\n  \"ConfigVersion\": {cfg.ConfigVersion},\n  \"Dashfall\": {IndentBlock(dashfallJson)},\n  \"CompAdjust\": {IndentBlock(compAdjustJson)},\n  \"CompTweaks\": {IndentBlock(compTweaksJson)}\n}}";
+            File.WriteAllText(ConfigFile, content);
+        }
+
+        public static void SaveConfig()
+        {
+            WriteConfig(Config ?? new ServerConfig());
+        }
+
+        public static void ReloadConfig()
+        {
+            var cfg = new ServerConfig();
+            try
+            {
+                if (!File.Exists(ConfigFile))
+                {
+                    Config = cfg;
+                    SyncFeatureStates(cfg);
+                    return;
+                }
+
+                string raw = File.ReadAllText(ConfigFile);
+                string clean = Regex.Replace(
+                    Regex.Replace(
+                        Regex.Replace(raw, @"//.*?$", "", RegexOptions.Multiline),
+                        @"/\*.*?\*/", "", RegexOptions.Singleline),
+                    @",\s*(\}|\])", "$1");
+
+                // Extract each section and deserialize flat into its class
+                string dashfallJson = ExtractSection(clean, "Dashfall");
+                string compAdjustJson = ExtractSection(clean, "CompAdjust");
+                string compTweaksJson = ExtractSection(clean, "CompTweaks");
+
+                if (!string.IsNullOrEmpty(dashfallJson))
+                    JsonUtility.FromJsonOverwrite(dashfallJson, cfg.Dashfall);
+                if (!string.IsNullOrEmpty(compAdjustJson))
+                    JsonUtility.FromJsonOverwrite(compAdjustJson, cfg.CompAdjust);
+                else if (!string.IsNullOrEmpty(dashfallJson))
+                    // Migrate: CompAdjust fields were previously stored in Dashfall section
+                    JsonUtility.FromJsonOverwrite(dashfallJson, cfg.CompAdjust);
+                if (!string.IsNullOrEmpty(compTweaksJson))
+                    JsonUtility.FromJsonOverwrite(compTweaksJson, cfg.CompTweaks);
+
+                bool missingGoalieReachFields =
+                    !clean.Contains("\"GoalieSlidingReachReduction\"") ||
+                    !clean.Contains("\"GoalieSlidingReachScale\"");
+                bool missingTorsoXYZFields =
+                    !clean.Contains("\"CustomTorsoScaleX\"") ||
+                    !clean.Contains("\"DisableCustomTorsoVisual\"");
+                bool missingCompAdjustSection = !clean.Contains("\"CompAdjust\"");
+                bool outdatedVersion = !Regex.IsMatch(clean, $"\"ConfigVersion\"\\s*:\\s*{CONFIG_VERSION}");
+
+                if (missingGoalieReachFields || missingTorsoXYZFields || missingCompAdjustSection || outdatedVersion)
+                {
+                    WriteConfig(cfg);
+                }
+
+                Config = cfg;
+                SyncFeatureStates(cfg);
+            }
+            catch
+            {
+                Config = new ServerConfig();
+                SyncFeatureStates(Config);
+            }
+        }
+
+        // Brace-counting extraction of a named JSON object section.
+        private static string ExtractSection(string json, string sectionName)
+        {
+            string key = $"\"{sectionName}\"";
+            int keyIdx = json.IndexOf(key);
+            if (keyIdx < 0) return null;
+
+            int colonIdx = json.IndexOf(':', keyIdx + key.Length);
+            if (colonIdx < 0) return null;
+
+            int start = json.IndexOf('{', colonIdx + 1);
+            if (start < 0) return null;
+
+            int depth = 1;
+            int i = start + 1;
+            while (i < json.Length && depth > 0)
+            {
+                if (json[i] == '{') depth++;
+                else if (json[i] == '}') depth--;
+                i++;
+            }
+            return depth == 0 ? json.Substring(start, i - start) : null;
+        }
+
+        private static void SyncFeatureStates(ServerConfig cfg)
+        {
+            try
+            {
+                DashFallMod.GoalieDashExtend.Enabled = cfg.Dashfall.GoalieDashExtendEnabled;
+                DashFallMod.Stances.Enabled = cfg.Dashfall.GoalieStancesEnabled;
+            }
+            catch { }
+        }
+
+        public static void Log(string message)
+        {
+            Debug.Log("[COMPADJUST] " + message);
+        }
+
+        public static void Dbg(string message)
+        {
+            if (Config.Dashfall.EnableDebugLogs) Log(message);
+        }
+    }
+}

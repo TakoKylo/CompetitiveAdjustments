@@ -1,0 +1,284 @@
+using HarmonyLib;
+using Unity.Netcode;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace CompetitivePuckTweaks.src
+{
+    internal static class TorsoDebugBrush
+    {
+        private const string BrushName = "__clipBrush";
+        private static Material _mat;
+
+        internal static void Sync(MeshCollider mc)
+        {
+            if (mc == null) return;
+
+            bool enabled = DashFallMod.Client.DashFallConfigLoader.ClientConfig?.ShowPlayerClipBrushes == true;
+
+            var existing = mc.transform.Find(BrushName);
+            if (!enabled)
+            {
+                if (existing != null) existing.gameObject.SetActive(false);
+                return;
+            }
+
+            if (existing == null)
+            {
+                var go = new GameObject(BrushName);
+                existing = go.transform;
+                existing.SetParent(mc.transform, false);
+                go.AddComponent<MeshFilter>();
+                var r = go.AddComponent<MeshRenderer>();
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                r.receiveShadows = false;
+                r.lightProbeUsage = LightProbeUsage.Off;
+                r.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            }
+
+            existing.gameObject.SetActive(true);
+            var mf = existing.GetComponent<MeshFilter>();
+            var mr = existing.GetComponent<MeshRenderer>();
+            if (mf == null || mr == null) return;
+
+            mr.enabled = true;
+            mr.sharedMaterial = GetMat();
+            mf.sharedMesh = mc.sharedMesh;
+            existing.localPosition = Vector3.zero;
+            existing.localRotation = Quaternion.identity;
+            existing.localScale = Vector3.one;
+        }
+
+        private static Material GetMat()
+        {
+            if (_mat != null) return _mat;
+            var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+            _mat = new Material(shader);
+            _mat.color = new Color(1f, 0.5f, 0.1f, 0.3f); // orange tint to distinguish from arena brushes
+            return _mat;
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerBodyV2), "OnNetworkPostSpawn")]
+    public class PlayerBodyPatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix(PlayerBodyV2 __instance, ref float ___slideTurnMultiplier,
+         ref float ___stopDrag, ref float ___balanceRecoveryTime, ref PlayerMesh ___playerMesh, ref float ___slideDrag, ref float ___tackleForceMultiplier,
+         ref float ___tackleForceThreshold, ref float ___tackleSpeedThreshold)
+        {
+            if (__instance.Player.IsReplay.Value) return;
+
+            if (GameManager.Instance.Phase == GamePhase.FaceOff)
+            {
+                if (__instance.Player.PlayerPosition.Name == "C")
+                {
+                    if (__instance.Player.Team == PlayerTeam.Blue) __instance.transform.position += new UnityEngine.Vector3(0, 0, PluginCore.config.CenterSpawnOffset);
+                    else __instance.transform.position -= new UnityEngine.Vector3(0, 0, PluginCore.config.CenterSpawnOffset);
+                }
+            }
+
+            ___slideTurnMultiplier = PluginCore.config.SlideTurnMultiplier;
+            ___stopDrag = PluginCore.config.StopDrag;
+            ___balanceRecoveryTime = PluginCore.config.BalanceRecoveryTime;
+            ___tackleForceMultiplier = PluginCore.config.TackleForceMultiplier;
+            ___tackleForceThreshold = PluginCore.config.TackleForceThreshold;
+            ___tackleSpeedThreshold = PluginCore.config.TackleSpeedThreshold;
+            __instance.GetComponent<CapsuleCollider>().radius *= PluginCore.config.TorsoColliderRadiusFactor;
+            __instance.GetComponent<SphereCollider>().radius *= PluginCore.config.HeadColliderRadiusFactor;
+
+            bool isGoalie = __instance.name.Contains("Goalie");
+            bool useCustomCollider = !isGoalie
+                && DashFallMod.ConfigManager.CompAdjust.EnableCustomSkaterTorsoModel
+                && PluginCore.torsoMesh != null;
+
+            // SmallerModels goalie groin offset
+            if (isGoalie && PluginCore.config.EnableSmallerModels)
+                ___playerMesh.PlayerGroin.transform.localPosition += new Vector3(0, 0.1f, 0);
+
+            if (!isGoalie)
+            {
+                var mf = ___playerMesh.PlayerTorso.GetComponentInChildren<MeshFilter>();
+                var mc = ___playerMesh.PlayerTorso.GetComponentInChildren<MeshCollider>();
+
+                // Save originals so RefreshPlayerTorsoStates can restore them.
+                if (mf != null)
+                {
+                    int mfId = mf.GetInstanceID();
+                    if (!PluginCore.OriginalTorsoMeshes.ContainsKey(mfId))
+                        PluginCore.OriginalTorsoMeshes[mfId] = mf.sharedMesh;
+                }
+
+                // ── COLLIDER — server config (EnableCustomSkaterTorsoModel) only ────────
+                if (mc != null)
+                {
+                    int mcId = mc.GetInstanceID();
+                    if (!PluginCore.OriginalTorsoColliderMeshes.ContainsKey(mcId))
+                        PluginCore.OriginalTorsoColliderMeshes[mcId] = mc.sharedMesh;
+                    if (!PluginCore.OriginalTorsoColliderLayers.ContainsKey(mcId))
+                        PluginCore.OriginalTorsoColliderLayers[mcId] = mc.gameObject.layer;
+
+                    if (useCustomCollider)
+                    {
+                        var colliderMesh = PluginCore.GetOrBuildScaledColliderMesh();
+                        if (colliderMesh != null)
+                        {
+                            mc.convex = true;
+                            mc.isTrigger = false;
+                            mc.sharedMesh = colliderMesh;
+                            // CRITICAL: Keep the original layer (not player body layer 8).
+                            // The physics matrix excludes player body layer from puck collisions.
+                            // The original layer allows puck collision to work correctly.
+                            // (Layer remains unchanged from game default)
+                            mc.enabled = false;
+                            mc.enabled = true;
+                            PluginCore.Log($"[TorsoApply] Custom collider. convex={mc.convex} layer={mc.gameObject.layer} bounds={mc.bounds}");
+                            TorsoDebugBrush.Sync(mc);
+                        }
+                        else
+                            PluginCore.Log($"[TorsoApply] Custom collider skipped (readable={PluginCore.torsoMesh.isReadable}).");
+                    }
+                    // If !useCustomCollider: original collider stays — nothing to do at spawn time.
+                }
+                else
+                    PluginCore.Log($"[TorsoApply] No MeshCollider on PlayerTorso. children={string.Join(", ", System.Linq.Enumerable.Select(___playerMesh.PlayerTorso.GetComponentsInChildren<Collider>(true), c => c.GetType().Name + ":" + c.name))}");
+
+                // ── VISUAL — handled by CompetitiveCompanion.PlayerBodyPatch (client config) ──
+                // The game's MeshRendererHider (Event_OnPlayerCameraEnabled) hides the local player's
+                // own body automatically — we must never touch mr.enabled here.
+
+                if (PluginCore.config.EnableSmallerModels)
+                {
+                    ___playerMesh.PlayerTorso.transform.localPosition += new Vector3(0, 0.27f, 0);
+                    ___playerMesh.PlayerGroin.GetComponentInChildren<MeshFilter>().mesh = PluginCore.groinMesh;
+                    ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>().sharedMesh = PluginCore.groinMesh;
+                }
+            }
+
+            ___playerMesh.PlayerTorso.GetComponentInChildren<MeshCollider>().material.bounciness = PluginCore.config.PlayerColliderBounciness;
+            ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>().material.bounciness = PluginCore.config.PlayerColliderBounciness;
+            ___playerMesh.PlayerHead.GetComponentInChildren<SphereCollider>().material.bounciness = PluginCore.config.PlayerColliderBounciness;
+
+            if (isGoalie) return;
+            
+            if (PluginCore.config.EnablePuckThroughBodies && !__instance.Player.IsReplay.Value)
+            {
+                ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>().excludeLayers |= (1 << LayerMask.NameToLayer("Puck"));
+                ___playerMesh.PlayerTorso.GetComponentInChildren<MeshCollider>().excludeLayers |= (1 << LayerMask.NameToLayer("Puck"));
+                ___playerMesh.PlayerHead.GetComponentInChildren<SphereCollider>().excludeLayers |= (1 << LayerMask.NameToLayer("Puck"));
+            }
+
+            if (PluginCore.config.EnablePuckThroughGroin && !__instance.Player.IsReplay.Value)
+            {
+                ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>().excludeLayers |= (1 << LayerMask.NameToLayer("Puck"));
+            }
+
+            ___slideDrag = PluginCore.config.SlideDrag;
+
+            if (PluginCore.config.ThinSkaterBodies)
+            {
+                ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>().transform.localScale = new Vector3(PluginCore.config.SkaterThinningFactor, 1, PluginCore.config.SkaterThinningFactor);
+                // When a custom torso model is active its MeshFilter and MeshCollider share the same
+                // child transform, which was already set to 100x scale to correct the Blender export unit
+                // mismatch.  Applying ThinSkaterBodies here would overwrite that scale, making the mesh
+                // invisible.  Skip torso thinning in that case — the custom shape defines its own width.
+                if (!useCustomCollider)
+                    ___playerMesh.PlayerTorso.GetComponentInChildren<MeshCollider>().transform.localScale = new Vector3(PluginCore.config.SkaterThinningFactor, 1, PluginCore.config.SkaterThinningFactor);
+            }
+            
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerBodyV2), "FixedUpdate")]
+    public class PlayerBodyFixedUpdatePatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix(PlayerBodyV2 __instance)
+        {
+            if (!__instance.IsUpright && !__instance.IsSideways) __instance.OnFall();
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerBodyV2), "DashLeft")]
+    public class PlayerBodyDashLeftPatch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(PlayerBodyV2 __instance, ref bool ___canDash, ref NetworkVariable<bool> ___IsSliding, ref float ___dashVelocity,
+        ref NetworkVariable<bool> ___IsStopping, ref float ___dashStaminaDrain)
+        {
+            if (__instance.Player.IsReplay.Value) return true;       
+            if (!___canDash) return false;
+            if (Mathf.Abs(__instance.transform.worldToLocalMatrix.MultiplyVector(__instance.Rigidbody.linearVelocity).x) > PluginCore.config.GoalieDashSpeedLimit) ___dashVelocity *= 0.5f;
+            else ___dashVelocity = 6f;
+            if (!PluginCore.config.EnableGoalieMicrodash) return true;
+            if (___IsSliding.Value) return true;
+            if (___IsStopping.Value) return true;
+            if (__instance.IsJumping) return true;
+            if (!(__instance.Rigidbody.linearVelocity.magnitude > 3.2f) && __instance.Stamina.Value > 0.5f * ___dashStaminaDrain)
+            {
+
+                __instance.Rigidbody.AddForce(-__instance.transform.right * ___dashVelocity * 0.55f, ForceMode.VelocityChange);
+                __instance.Stamina.Value -= PluginCore.config.MicrodashStamCostFraction * ___dashStaminaDrain;
+                return false;
+            }
+            return true;
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerBodyV2), "DashRight")]
+    public class PlayerBodyDashRightPatch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(PlayerBodyV2 __instance, ref bool ___canDash, ref NetworkVariable<bool> ___IsSliding, ref float ___dashVelocity, ref NetworkVariable<bool> ___IsStopping, ref float ___dashStaminaDrain)
+        {
+            if (__instance.Player.IsReplay.Value) return true;
+            if (!___canDash) return false;
+            if (Mathf.Abs(__instance.transform.worldToLocalMatrix.MultiplyVector(__instance.Rigidbody.linearVelocity).x) > PluginCore.config.GoalieDashSpeedLimit) ___dashVelocity *= 0.5f;
+            else ___dashVelocity = 6f;
+            if (!PluginCore.config.EnableGoalieMicrodash) return true;            
+            if (___IsSliding.Value) return true;
+            if (___IsStopping.Value) return true;
+            if (__instance.IsJumping) return true;
+            if (!(__instance.Rigidbody.linearVelocity.magnitude > 3.2f) && __instance.Stamina.Value > 0.5f * ___dashStaminaDrain)
+            {
+                __instance.Rigidbody.AddForce(__instance.transform.right * ___dashVelocity * 0.55f, ForceMode.VelocityChange);
+                __instance.Stamina.Value -= PluginCore.config.MicrodashStamCostFraction * ___dashStaminaDrain;
+                return false;
+            }
+            return true;
+
+        }
+    }
+
+    /// <summary>
+    /// Client-side debug visualization for arena and player collider meshes.
+    /// Called from the settings UI toggles; no per-frame cost when disabled.
+    /// </summary>
+    internal static class ClientClipBrushes
+    {
+        /// <summary>Toggle arena collider mesh visualization on/off.</summary>
+        internal static void ApplyArena(bool show)
+        {
+            // Delegates to GoalNetTweaks.SyncArenaColliderDebugBrushes which handles all
+            // collider types (Box/Sphere/Capsule/Mesh) on the custom arena instance.
+            // IsArenaColliderDebugEnabled() now also checks ShowArenaClipBrushes.
+            DashFallMod.GoalNetTweaks.RefreshArenaColliderBrushes();
+        }
+
+        /// <summary>Toggle player collider mesh visualization on/off. Refreshes TorsoDebugBrush on all bodies.</summary>
+        internal static void ApplyPlayer(bool show)
+        {
+            // TorsoDebugBrush.Sync already checks ShowPlayerClipBrushes from config.
+            // Force a refresh on all current bodies.
+            var bodies = UnityEngine.Object.FindObjectsByType<PlayerBodyV2>(FindObjectsSortMode.None);
+            foreach (var body in bodies)
+            {
+                if (body == null) continue;
+                var torsoGo = body.PlayerMesh?.PlayerTorso;
+                if (torsoGo == null) continue;
+                var mc = torsoGo.GetComponentInChildren<MeshCollider>();
+                if (mc != null) TorsoDebugBrush.Sync(mc);
+            }
+        }
+    }
+}

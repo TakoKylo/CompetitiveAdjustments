@@ -1,0 +1,165 @@
+// File: DashFallGameMod.cs
+// Main entry point for the DashFall mod
+// Orchestrates all sub-modules: Dash, Dive, Twist, SlideInfluence
+
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using HarmonyLib;
+using Unity.Netcode;
+using UnityEngine;
+using PoncePuck.Keybinds;
+using DashFallMod;
+
+public sealed class DashFallGameMod
+{
+    private Harmony _harmony;
+    
+    // Config is accessed directly via DashFallMod.ConfigManager.Config
+    
+    public DashFallGameMod() { }
+    
+    public bool OnEnable()
+    {
+        try
+        {
+            bool isHeadless = Application.isBatchMode ||
+                              SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null;
+            bool isServerRuntime = Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsServer;
+
+            // Only server/headless should create/read CompetitiveAdjustments.json.
+            if (isHeadless || isServerRuntime)
+            {
+                ConfigManager.EnsureConfig();
+                ConfigManager.ReloadConfig();
+            }
+            
+            ServerBridge.Hook("DashFall");
+            ServerBridge.OnAction += OnClientAction;
+            
+            _harmony = new Harmony("net.poncepuck.dashfall");
+            _harmony.PatchAll(typeof(DashFallGameMod));
+            HarmonyPatchHelper.PatchNamespaces(_harmony, "DashFallMod", "PoncePuck.Keybinds", "PonceMods.Shared");
+            
+            EventManager.AddEventListener("Event_OnPlayerBodySpawned", OnBodySpawned);
+            EventManager.AddEventListener("Event_OnPlayerRoleChanged", OnRoleChanged);
+            
+            // Initialize client immediately if not headless
+            
+            if (!isHeadless)
+            {
+                InitializeClientComponents();
+            }
+            
+            ConfigManager.Dbg("Enabled - Modules: Dash, Dive, Twist, SlideInfluence");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[COMPADJUST] FATAL ERROR in OnEnable: {ex}");
+            return false;
+        }
+    }
+    
+    private static void InitializeClientComponents()
+    {
+        try
+        {
+            var go = new GameObject("DashFallClientRunner");
+            go.AddComponent<DashFallMod.Client.DashFallClientRunner>();
+            UnityEngine.Object.DontDestroyOnLoad(go);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[COMPADJUST] Failed to initialize client: {ex}");
+        }
+    }
+    
+    public bool OnDisable()
+    {
+        ServerBridge.OnAction -= OnClientAction;
+        ServerBridge.Unhook();
+        _harmony?.UnpatchSelf();
+        
+        EventManager.RemoveEventListener("Event_OnPlayerBodySpawned", OnBodySpawned);
+        EventManager.RemoveEventListener("Event_OnPlayerRoleChanged", OnRoleChanged);
+        
+        // Unregister from ModMenuHub
+        try
+        {
+            PonceMods.Shared.ModMenuHub.UnregisterMod("DashFall");
+            ConfigManager.Dbg("Unregistered from ModMenuHub");
+        }
+        catch { }
+        
+        // Destroy the client runner
+        var clientRunner = UnityEngine.Object.FindFirstObjectByType<DashFallMod.Client.DashFallClientRunner>();
+        if (clientRunner != null)
+        {
+            UnityEngine.Object.Destroy(clientRunner.gameObject);
+        }
+        
+        ConfigManager.Dbg("Disabled");
+        return true;
+    }
+    
+    private void OnBodySpawned(Dictionary<string, object> msg)
+    {
+        var body = msg?["playerBody"] as PlayerBodyV2;
+        if (body != null) DashMod.EnableDash(body);
+    }
+    
+    private void OnRoleChanged(Dictionary<string, object> msg)
+    {
+        var player = msg?["player"] as Player;
+        if (player?.PlayerBody != null) DashMod.EnableDash(player.PlayerBody);
+    }
+    
+    // ===== Bridge actions =====
+    private static void OnClientAction(ulong clientId, string action, bool isDown)
+    {
+        if (!isDown) return; // edge trigger on down
+        var p = FindPlayerByClientId(clientId);
+        if (p == null || p.PlayerBody == null) return;
+        
+        var cfg = ConfigManager.Config;
+        bool isGoalie = p.Role == PlayerRole.Goalie;
+        
+        if (action == "dashleft" || action == "dashright")
+        {
+            // Skater dash disabled — goalies use base game dash
+        }
+        else if (action == "goaliestandingdashleft" || action == "goaliestandingdashright")
+        {
+            // Goalie standing dash from custom keybinds - check if feature is enabled
+            if (isGoalie && cfg.GoalieStandingDashEnabled)
+            {
+                DashMod.ProcessGoalieStandingDash(p.PlayerBody, action == "goaliestandingdashleft");
+            }
+        }
+        else if (action == "dive")
+        {
+            bool allowed = isGoalie ? cfg.GoalieDiveEnabled : cfg.SkaterDiveEnabled;
+            if (allowed)
+            {
+                DiveMod.TryStartDiveNow(p.PlayerInput);
+            }
+        }
+        else if (action == "twistleft" || action == "twistright")
+        {
+            bool allowed = isGoalie ? cfg.GoalieTwistWhileSlidingEnabled : cfg.EnableTwistWhileSliding;
+            if (allowed)
+            {
+                TwistMod.ProcessTwistFromBridge(p.PlayerBody, action == "twistleft");
+            }
+        }
+    }
+    
+    private static Player FindPlayerByClientId(ulong clientId)
+    {
+        foreach (var pi in UnityEngine.Object.FindObjectsByType<PlayerInput>(UnityEngine.FindObjectsSortMode.None))
+            if (pi != null && pi.Player != null && pi.Player.OwnerClientId == clientId) return pi.Player;
+        return null;
+    }
+}
+// ServerBridge is now in DashFall.ServerBridge.cs
