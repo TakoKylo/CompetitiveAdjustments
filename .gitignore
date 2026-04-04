@@ -2,6 +2,16 @@
 bin/
 obj/
 
+# Unity / CompAssets generated folders
+CompAssets/Library/
+CompAssets/Logs/
+CompAssets/Build/
+CompAssets/BundleOutput/
+CompAssets/UserSettings/
+CompAssets/obj/
+CompAssets/*.csproj
+CompAssets/*.slnx
+
 # Visual Studio
 .vs/
 *.user

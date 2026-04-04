@@ -143,7 +143,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <FrameBundleSrc>C:\Users\Amiki\OneDrive\Desktop\Desk\Development\CompAssets\BundleOutput\CompAssets</FrameBundleSrc>
+    <FrameBundleSrc>$(MSBuildProjectDirectory)\CompAssets\BundleOutput\CompAssets</FrameBundleSrc>
     <FrameBundleDest>$(DeployDir)\assets\compassets</FrameBundleDest>
   </PropertyGroup>
 
