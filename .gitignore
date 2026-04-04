@@ -13,3 +13,4 @@ obj/
 # NuGet
 *.nupkg
 packages/
+src/PUCK_202_TO_310_MIGRATION_GUIDE.md

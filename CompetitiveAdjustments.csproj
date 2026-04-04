@@ -21,7 +21,7 @@
   <!-- Game install paths -->
   <PropertyGroup>
     <GameDir>C:\Program Files (x86)\Steam\steamapps\common\Puck</GameDir>
-    <GameManaged>$(MSBuildProjectDirectory)\lib</GameManaged>
+    <GameManaged>$(MSBuildProjectDirectory)\libs</GameManaged>
     <DeployDir>C:\Program Files (x86)\Steam\steamapps\common\Puck\Plugins\CompetitiveAdjustments</DeployDir>
   </PropertyGroup>
 
@@ -122,7 +122,7 @@
 
     <!-- System.Memory (required by System.Text.Json / ReadOnlySpan) -->
     <Reference Include="System.Memory">
-      <HintPath>lib\System.Memory.dll</HintPath>
+      <HintPath>libs\System.Memory.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
@@ -131,13 +131,13 @@
   <ItemGroup>
     <!-- AYellowpaper SerializedCollections (for PlayerLegPadPatch) -->
     <Reference Include="AYellowpaper.SerializedCollections">
-      <HintPath>lib\AYellowpaper.SerializedCollections.dll</HintPath>
+      <HintPath>libs\AYellowpaper.SerializedCollections.dll</HintPath>
       <Private>false</Private>
     </Reference>
 
-    <!-- System.Text.Json (not in game managed, supplied in lib/) -->
+    <!-- System.Text.Json (not in game managed, supplied in libs/) -->
     <Reference Include="System.Text.Json">
-      <HintPath>lib\System.Text.Json.dll</HintPath>
+      <HintPath>libs\System.Text.Json.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
