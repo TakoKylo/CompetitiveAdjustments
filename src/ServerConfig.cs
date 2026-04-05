@@ -81,6 +81,14 @@ namespace CompetitiveAdjustments
         public float ArenaRotX = 90f;
         public float ArenaRotY = 180f;
         public float ArenaRotZ = 0f;
+
+        // --- Free Blade ---
+        public bool FreeBladeEnabled = false;
+
+        // --- High Sticking ---
+        public bool HighStickingEnabled = false;
+        public float HighStickingActivateAngle = -20f;
+        public float HighStickingMaxAngle = -80f;
     }
 
     [Serializable]

@@ -10,6 +10,8 @@ namespace CompetitivePuckTweaks.src
         public float TorsoScaleX;
         public float TorsoScaleY;
         public float TorsoScaleZ;
+        public float HighStickingActivateAngle;
+        public float HighStickingMaxAngle;
 
         public ConfigSyncPackage(CompetitiveAdjustments.CompTweaksConfig c, CompetitiveAdjustments.CompAdjustConfig df = null)
         {
@@ -19,6 +21,8 @@ namespace CompetitivePuckTweaks.src
             TorsoScaleX = df?.CustomTorsoScaleX ?? 1f;
             TorsoScaleY = df?.CustomTorsoScaleY ?? 1f;
             TorsoScaleZ = df?.CustomTorsoScaleZ ?? 1f;
+            HighStickingActivateAngle = df?.HighStickingActivateAngle ?? -20f;
+            HighStickingMaxAngle     = df?.HighStickingMaxAngle     ?? -80f;
         }
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
@@ -29,6 +33,8 @@ namespace CompetitivePuckTweaks.src
             serializer.SerializeValue(ref TorsoScaleX);
             serializer.SerializeValue(ref TorsoScaleY);
             serializer.SerializeValue(ref TorsoScaleZ);
+            serializer.SerializeValue(ref HighStickingActivateAngle);
+            serializer.SerializeValue(ref HighStickingMaxAngle);
         }
 
         public static uint PackBools(CompetitiveAdjustments.CompTweaksConfig c, CompetitiveAdjustments.CompAdjustConfig df = null)
@@ -52,6 +58,8 @@ namespace CompetitivePuckTweaks.src
             if (c.BananaMode)                  b |= 1u << 15;
             if (df?.EnableCustomSkaterTorsoModel == true) b |= 1u << 16;
             if (df?.DisableCustomTorsoVisual   == true) b |= 1u << 17;
+            if (df?.FreeBladeEnabled           == true) b |= 1u << 18;
+            if (df?.HighStickingEnabled        == true) b |= 1u << 19;
             return b;
         }
 
@@ -83,6 +91,10 @@ namespace CompetitivePuckTweaks.src
             df.CustomTorsoScaleX            = pkg.TorsoScaleX;
             df.CustomTorsoScaleY            = pkg.TorsoScaleY;
             df.CustomTorsoScaleZ            = pkg.TorsoScaleZ;
+            df.FreeBladeEnabled             = (pkg.BoolFlags & (1u << 18)) != 0;
+            df.HighStickingEnabled          = (pkg.BoolFlags & (1u << 19)) != 0;
+            df.HighStickingActivateAngle    = pkg.HighStickingActivateAngle;
+            df.HighStickingMaxAngle         = pkg.HighStickingMaxAngle;
         }
     }
 }

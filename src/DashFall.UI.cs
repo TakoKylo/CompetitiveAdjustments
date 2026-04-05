@@ -440,6 +440,10 @@ namespace DashFallMod.Client
             _actionsSection.Add(MakeServerConfigRow("Goal Net Tweaks", CompetitiveAdjustments.ConfigManager.Config.CompAdjust.EnableGoalNetTweaks));
             _actionsSection.Add(MakeServerConfigRow("Arena Tweaks", CompetitiveAdjustments.ConfigManager.Config.CompAdjust.EnableArenaTweaks));
 
+            AddSubHeader("STICK MODIFIERS");
+            _actionsSection.Add(MakeServerConfigRow("Free Blade", CompetitiveAdjustments.ConfigManager.Config.CompAdjust.FreeBladeEnabled));
+            _actionsSection.Add(MakeServerConfigRow("Higher Stick", CompetitiveAdjustments.ConfigManager.Config.CompAdjust.HighStickingEnabled));
+
             // --- CompTweaks Flags ---
             // These are read from the synced config (CompetitivePuckTweaks values)
             var tweaksCfg = CompetitivePuckTweaks.src.PluginCore.config;
