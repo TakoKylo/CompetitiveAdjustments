@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Remove="Puck\**\*.cs" />
     <Compile Remove="decompiled_puck_game\**\*.cs" />
+    <Compile Remove="CompAssets\**\*.cs" />
   </ItemGroup>
 
   <!-- Embed player state icons as resources -->
