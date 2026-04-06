@@ -89,6 +89,12 @@ namespace CompetitiveAdjustments
         public bool HighStickingEnabled = false;
         public float HighStickingActivateAngle = -20f;
         public float HighStickingMaxAngle = -80f;
+
+        // --- Stick Body Collision ---
+        public bool StickBodyCollision = false;
+
+        // --- Ball Mode ---
+        public bool BallMode = false;
     }
 
     [Serializable]

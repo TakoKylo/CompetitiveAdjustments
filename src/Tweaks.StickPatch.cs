@@ -30,6 +30,34 @@ namespace CompetitivePuckTweaks.src
 
             __instance.Rigidbody.mass = PluginCore.config.StickMass;
 
+            // Own-body ignore: runs regardless of DisableShaftCollision.
+            // Layer 6-8 is enabled globally when StickBodyCollision is on; this prevents self-hit.
+            if (CompetitiveAdjustments.ConfigManager.Config?.CompAdjust?.StickBodyCollision == true)
+            {
+                Player owner = null;
+                foreach (var p in UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None))
+                {
+                    if (p?.Stick == __instance) { owner = p; break; }
+                }
+                if (owner != null)
+                {
+                    PlayerBodyV2 ownerBody = null;
+                    foreach (var b in UnityEngine.Object.FindObjectsByType<PlayerBodyV2>(FindObjectsSortMode.None))
+                    {
+                        if (b.Player == owner) { ownerBody = b; break; }
+                    }
+                    if (ownerBody != null)
+                    {
+                        var stickCols = __instance.GetComponentsInChildren<Collider>();
+                        var bodyCols  = ownerBody.GetComponentsInChildren<Collider>();
+                        foreach (var sc in stickCols)
+                            foreach (var bc in bodyCols)
+                                if (sc != null && bc != null)
+                                    Physics.IgnoreCollision(sc, bc, true);
+                    }
+                }
+            }
+
             if (PluginCore.config.DisableShaftCollision == false) return;
 
             if (PluginCore.config.EnableMidStickCollider)

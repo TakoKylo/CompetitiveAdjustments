@@ -26,6 +26,9 @@ namespace CompetitivePuckTweaks.src
             PluginCore.PuckIDs.Add(__instance.StickCollider.GetInstanceID());
             PluginCore.PuckIDs.Add(__instance.IceCollider.GetInstanceID());
 
+            if (CompetitiveAdjustments.BallModeHelper.IsBallModeEnabled)
+                CompetitiveAdjustments.BallModeHelper.TransformPuckToBall(__instance);
+
             if (PluginCore.config.EnableMidStickCollider)
             {
                 foreach (Stick stick in UnityEngine.Object.FindObjectsByType<Stick>(FindObjectsSortMode.None))
@@ -105,6 +108,7 @@ namespace CompetitivePuckTweaks.src
         {
             if (PluginCore.PuckIDs.Contains(__instance.StickCollider.GetInstanceID())) { PluginCore.PuckIDs.Remove(__instance.StickCollider.GetInstanceID()); }
             if (PluginCore.PuckIDs.Contains(__instance.IceCollider.GetInstanceID())) { PluginCore.PuckIDs.Remove(__instance.IceCollider.GetInstanceID()); }
+            CompetitiveAdjustments.BallModeHelper.OnPuckDespawned(__instance);
         }
     }
 }

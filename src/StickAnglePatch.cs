@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -30,6 +32,68 @@ namespace CompetitivePuckTweaks.src
 
         internal static CompetitiveAdjustments.CompAdjustConfig Cfg =>
             CompetitiveAdjustments.ConfigManager.Config.CompAdjust;
+
+        // Saved vanilla blade angle limits per player (captured before first modification)
+        private static readonly Dictionary<int, (int min, int max)> _savedBladeAngles =
+            new Dictionary<int, (int min, int max)>();
+
+        /// <summary>
+        /// Save the vanilla blade angle limits for a player before any modification.
+        /// Called from spawn patches so we can restore on disable.
+        /// </summary>
+        internal static void SaveOriginals(Player player)
+        {
+            if (player?.PlayerInput == null) return;
+            int id = player.GetInstanceID();
+            if (_savedBladeAngles.ContainsKey(id)) return;
+            _savedBladeAngles[id] = (
+                minBladeRef(player.PlayerInput),
+                maxBladeRef(player.PlayerInput)
+            );
+        }
+
+        /// <summary>
+        /// Re-apply or restore FreeBlade / HighSticking limits on all live players.
+        /// Called from /reload and config sync receive so changes take effect at runtime.
+        /// </summary>
+        internal static void RefreshFreeBladeForAllPlayers()
+        {
+            var cfg = Cfg;
+            try
+            {
+                foreach (var player in UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None))
+                {
+                    if (player?.PlayerInput == null) continue;
+                    int id = player.GetInstanceID();
+
+                    // Save originals on first encounter (for players who spawned before mod loaded)
+                    if (!_savedBladeAngles.ContainsKey(id))
+                        _savedBladeAngles[id] = (minBladeRef(player.PlayerInput), maxBladeRef(player.PlayerInput));
+
+                    if (cfg.FreeBladeEnabled)
+                    {
+                        minBladeRef(player.PlayerInput) = -127;
+                        maxBladeRef(player.PlayerInput) = 127;
+                    }
+                    else if (_savedBladeAngles.TryGetValue(id, out var orig))
+                    {
+                        minBladeRef(player.PlayerInput) = orig.min;
+                        maxBladeRef(player.PlayerInput) = orig.max;
+                    }
+
+                    if (cfg.HighStickingEnabled)
+                    {
+                        Vector2 min = minStickAngleRef(player.PlayerInput);
+                        min.x = cfg.HighStickingMaxAngle;
+                        minStickAngleRef(player.PlayerInput) = min;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[COMPADJUST] RefreshFreeBlade failed: {ex.Message}");
+            }
+        }
     }
 
     // ── 1. Apply blade / stick angle limits on every spawn ──────────────────
@@ -42,6 +106,9 @@ namespace CompetitivePuckTweaks.src
         {
             if (__instance.PlayerInput == null) return;
             var cfg = StickAngleRefs.Cfg;
+
+            // Save vanilla limits before any modification so /reload can restore them
+            StickAngleRefs.SaveOriginals(__instance);
 
             if (cfg.FreeBladeEnabled)
             {
@@ -124,9 +191,13 @@ namespace CompetitiveCompanion
         [HarmonyPostfix]
         public static void Postfix(PlayerBodyV2 __instance)
         {
+            if (__instance.Player?.PlayerInput == null) return;
+
+            // Save vanilla limits before modification so config sync can restore them
+            StickAngleRefs.SaveOriginals(__instance.Player);
+
             var cfg = DashFallMod.ConfigManager.CompAdjust;
             if (!cfg.FreeBladeEnabled) return;
-            if (__instance.Player?.PlayerInput == null) return;
 
             StickAngleRefs.minBladeRef(__instance.Player.PlayerInput) = -127;
             StickAngleRefs.maxBladeRef(__instance.Player.PlayerInput) = 127;

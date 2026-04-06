@@ -72,6 +72,7 @@ namespace CompetitivePuckTweaks.src
                 EnsurePlayerMeshesLoadedForCurrentConfig();
 
                 if (config.DisableStickCollision) Physics.IgnoreLayerCollision(6, 6, true);
+                Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.Config?.CompAdjust?.StickBodyCollision == true));
 
                 Time.fixedDeltaTime = config.FixedDeltaTime;
                 Physics.defaultSolverIterations = config.SolverIterations;
@@ -534,11 +535,16 @@ namespace CompetitivePuckTweaks.src
 
             EnsurePlayerMeshesLoadedForCurrentConfig();
             Physics.IgnoreLayerCollision(6, 6, config.DisableStickCollision);
+            Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.Config?.CompAdjust?.StickBodyCollision == true));
             Time.fixedDeltaTime = config.FixedDeltaTime;
             Physics.defaultSolverIterations = config.SolverIterations;
 
             // Keep runtime pucks aligned with current config (e.g. /reload or config edits).
             RescaleAllExistingPucks();
+            CompetitiveAdjustments.BallModeHelper.RefreshAllPucks();
+
+            // Re-apply free blade / high sticking to existing players on /reload.
+            StickAngleRefs.RefreshFreeBladeForAllPlayers();
 
             // Re-apply or restore custom torso meshes and sync debug brushes on live players.
             RefreshPlayerTorsoStates();

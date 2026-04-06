@@ -60,6 +60,8 @@ namespace CompetitivePuckTweaks.src
             if (df?.DisableCustomTorsoVisual   == true) b |= 1u << 17;
             if (df?.FreeBladeEnabled           == true) b |= 1u << 18;
             if (df?.HighStickingEnabled        == true) b |= 1u << 19;
+            if (df?.BallMode                  == true) b |= 1u << 20;
+            if (df?.StickBodyCollision        == true) b |= 1u << 21;
             return b;
         }
 
@@ -95,6 +97,8 @@ namespace CompetitivePuckTweaks.src
             df.HighStickingEnabled          = (pkg.BoolFlags & (1u << 19)) != 0;
             df.HighStickingActivateAngle    = pkg.HighStickingActivateAngle;
             df.HighStickingMaxAngle         = pkg.HighStickingMaxAngle;
+            df.BallMode                     = (pkg.BoolFlags & (1u << 20)) != 0;
+            df.StickBodyCollision           = (pkg.BoolFlags & (1u << 21)) != 0;
         }
     }
 }

@@ -49,6 +49,8 @@ namespace CompetitiveCompanion
         public static void Postfix(PuckManager __instance, Puck puck)
         {
             puck.transform.localScale = Vector3.one * PluginCore.config.PuckScale;
+            if (CompetitiveAdjustments.BallModeHelper.IsBallModeEnabled)
+                CompetitiveAdjustments.BallModeHelper.TransformPuckToBall(puck);
         }
     }
 
@@ -65,6 +67,9 @@ namespace CompetitiveCompanion
                 scale = PluginCore.config.PuckScale;
 
             __instance.transform.localScale = Vector3.one * scale;
+
+            if (CompetitiveAdjustments.BallModeHelper.IsBallModeEnabled)
+                CompetitiveAdjustments.BallModeHelper.TransformPuckToBall(__instance);
 
             // Client timing guard: if spawn happened before receiving CPT_sync_config,
             // ask the server for a fresh sync and let ReceiveMessage re-apply to all pucks.
