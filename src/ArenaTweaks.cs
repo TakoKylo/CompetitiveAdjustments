@@ -1574,8 +1574,10 @@ namespace DashFallMod
             if (!nm.IsServer && !_hasSyncedTweaks) return;
 
             // Set the modded values on the statics so the transpiler and postfix use them.
-            ArenaBoundsHelper.ActivePrecision = 100f;
-            ArenaBoundsHelper.ActiveThreshold = 0.02f;
+            // Precision 300 gives ~3.3mm quantization (vs 10mm at 100) while still supporting
+            // arena positions up to +/-109 units. Keeps player movement smooth.
+            ArenaBoundsHelper.ActivePrecision = 300f;
+            ArenaBoundsHelper.ActiveThreshold = 0.005f;
 
             try
             {
@@ -1595,7 +1597,7 @@ namespace DashFallMod
                 ArenaBoundsHelper.ApplyThresholdToExisting();
 
                 _networkBoundsPatched = true;
-                Debug.Log("[COMPADJUST] Arena network bounds patches applied (precision 655→100, threshold 1mm→20mm).");
+                Debug.Log("[COMPADJUST] Arena network bounds patches applied (precision 655→300, threshold 1mm→5mm, players excluded).");
             }
             catch (Exception ex)
             {
@@ -1694,8 +1696,10 @@ namespace DashFallMod
 
         // Raise the position update threshold so that floating-point noise at the
         // chosen precision level does not spam the network with spurious micro-moves.
+        // Skip player-related objects to prevent movement jitter.
         internal static void ThresholdPostfix(SynchronizedObject __instance)
         {
+            if (IsPlayerRelated(__instance)) return;
             ApplyThreshold(__instance);
         }
 
@@ -1707,8 +1711,21 @@ namespace DashFallMod
             foreach (var so in UnityEngine.Object.FindObjectsByType<SynchronizedObject>(FindObjectsSortMode.None))
             {
                 if (so == null) continue;
+                if (IsPlayerRelated(so)) continue;
                 ApplyThreshold(so, field);
             }
+        }
+
+        /// <summary>
+        /// Returns true for SynchronizedObjects attached to players, sticks, or pucks.
+        /// These must keep vanilla precision/threshold to avoid movement jitter.
+        /// </summary>
+        private static bool IsPlayerRelated(SynchronizedObject so)
+        {
+            if (so == null) return false;
+            return so.GetComponentInParent<PlayerBodyV2>() != null
+                || so.GetComponentInParent<Stick>() != null
+                || so.GetComponentInParent<Puck>() != null;
         }
 
         internal static void RestoreThresholdToExisting()

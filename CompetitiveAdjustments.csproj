@@ -24,6 +24,7 @@
     <GameDir>C:\Program Files (x86)\Steam\steamapps\common\Puck</GameDir>
     <GameManaged>$(MSBuildProjectDirectory)\libs</GameManaged>
     <DeployDir>C:\Program Files (x86)\Steam\steamapps\common\Puck\Plugins\CompetitiveAdjustments</DeployDir>
+    <DeployDir2>C:\Users\Amiki\OneDrive\Desktop\Desk\Development\PuckServerB312\Plugins\CompetitiveAdjustments</DeployDir2>
   </PropertyGroup>
 
   <ItemGroup>

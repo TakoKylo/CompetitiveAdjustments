@@ -20,6 +20,9 @@ CompAssets/*.slnx
 # Logs
 *.log
 
+# Stray API/debug dumps
+response.json
+
 # NuGet
 *.nupkg
 packages/

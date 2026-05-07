@@ -434,6 +434,10 @@ namespace CompetitiveCompanion
                 if (DashFallMod.Client.DashFallConfigLoader.ClientConfig?.ShowPlayerClipBrushes == true)
                     CompetitivePuckTweaks.src.ClientClipBrushes.ApplyPlayer(true);
 
+                // Refresh ball mode and free blade for existing objects
+                CompetitiveAdjustments.BallModeHelper.RefreshAllPucks();
+                CompetitivePuckTweaks.src.StickAngleRefs.RefreshFreeBladeForAllPlayers();
+
                 Debug.Log($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] Synced server config (PuckScale={receivedPackage.PuckScale}, LegPadOffset={receivedPackage.LegPadOffset}, flags=0x{receivedPackage.BoolFlags:X4}, torsoScale={receivedPackage.TorsoScaleX:F2},{receivedPackage.TorsoScaleY:F2},{receivedPackage.TorsoScaleZ:F2})");
                 
                 // Apply the puck scale to any existing pucks immediately
