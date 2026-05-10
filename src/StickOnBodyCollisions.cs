@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace CompetitivePuckTweaks.src {
     public class StickOnBodyCollisions {
-        private const float STICK_FORCE_SOUND_THRESHOLD = 17f;
+        private const float STICK_FORCE_SOUND_THRESHOLD = 17.5f;
         private const int STICK_LAYER = 6;
 
         private static readonly bool _disablePatch = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust.StickBodyCollision == null || !(bool)CompetitiveAdjustments.ConfigManager.Config?.CompAdjust.StickBodyCollision;
