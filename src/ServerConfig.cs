@@ -419,6 +419,10 @@ namespace CompetitiveAdjustments
             Debug.LogWarning("[COMPADJUST] " + message);
         }
 
+        public static void LogError(string message) {
+            Debug.LogError("[COMPADJUST] " + message);
+        }
+
         public static void Dbg(string message)
         {
             if (Config.Dashfall.EnableDebugLogs) Log(message);

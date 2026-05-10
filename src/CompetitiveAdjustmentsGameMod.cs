@@ -67,7 +67,7 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckMod
         }
         catch (Exception ex)
         {
-            Debug.LogError("[COMPADJUST] FATAL in OnEnable: " + ex);
+            CompetitiveAdjustments.ConfigManager.LogError("FATAL in OnEnable: " + ex);
             return false;
         }
     }
@@ -87,7 +87,7 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckMod
         }
         catch (Exception ex)
         {
-            Debug.LogError("[COMPADJUST] Error in OnDisable: " + ex);
+            CompetitiveAdjustments.ConfigManager.LogError("Error in OnDisable: " + ex);
             return false;
         }
     }
@@ -107,7 +107,7 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckMod
         }
         catch (Exception ex)
         {
-            Debug.LogError("[COMPADJUST] Failed to enable server runtime components: " + ex);
+            CompetitiveAdjustments.ConfigManager.LogError("Failed to enable server runtime components: " + ex);
         }
     }
 
