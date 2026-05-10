@@ -282,7 +282,7 @@ namespace CompetitiveAdjustments
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning("[COMPADJUST] Error upgrading config: " + ex.Message);
+                    CompetitiveAdjustments.ConfigManager.LogWarning("Error upgrading config: " + ex.Message);
                 }
             }
             else
@@ -413,6 +413,10 @@ namespace CompetitiveAdjustments
         public static void Log(string message)
         {
             Debug.Log("[COMPADJUST] " + message);
+        }
+
+        public static void LogWarning(string message) {
+            Debug.LogWarning("[COMPADJUST] " + message);
         }
 
         public static void Dbg(string message)

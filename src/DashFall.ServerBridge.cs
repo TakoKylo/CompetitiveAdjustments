@@ -377,7 +377,7 @@ namespace PoncePuck.Keybinds
             var players = PlayerManager.Instance?.GetPlayers();
             if (players == null || players.Count == 0)
             {
-                Debug.LogWarning("[COMPADJUST] No players to send features to");
+                CompetitiveAdjustments.ConfigManager.LogWarning("No players to send features to");
                 return;
             }
 
