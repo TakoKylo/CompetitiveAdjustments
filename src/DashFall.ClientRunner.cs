@@ -155,7 +155,7 @@ namespace DashFallMod.Client
             float baseScale = SettingsManager.MinimapScale;
             minimapEl.style.scale = new UnityEngine.Vector2(baseScale, baseScale);
             contentEl.style.scale = new UnityEngine.Vector2(1f, 1f);
-            Debug.Log("[COMPADJUST] Minimap scale reset to default.");
+            CompetitiveAdjustments.ConfigManager.Log("Minimap scale reset to default.");
         }
 
         // Synchronous: applies or resets minimap scale right now, no yield.
@@ -186,7 +186,7 @@ namespace DashFallMod.Client
             var uiMinimap = FindUIMinimap();
             if (uiMinimap == null)
             {
-                Debug.Log("[COMPADJUST] ApplyMinimapScale: UIMinimap not in scene yet");
+                CompetitiveAdjustments.ConfigManager.Log("ApplyMinimapScale: UIMinimap not in scene yet");
                 return;
             }
 
@@ -194,7 +194,7 @@ namespace DashFallMod.Client
             var contentField = typeof(UIMinimap).GetField("content", BindingFlags.NonPublic | BindingFlags.Instance);
             if (minimapField == null || contentField == null)
             {
-                Debug.Log("[COMPADJUST] ApplyMinimapScale: field(s) not found on UIMinimap");
+                CompetitiveAdjustments.ConfigManager.Log("ApplyMinimapScale: field(s) not found on UIMinimap");
                 return;
             }
 
@@ -202,7 +202,7 @@ namespace DashFallMod.Client
             var contentEl = contentField.GetValue(uiMinimap) as UITK.VisualElement;
             if (minimapEl == null || contentEl == null)
             {
-                Debug.Log("[COMPADJUST] ApplyMinimapScale: minimap or content VisualElement is null");
+                CompetitiveAdjustments.ConfigManager.Log("ApplyMinimapScale: minimap or content VisualElement is null");
                 return;
             }
 

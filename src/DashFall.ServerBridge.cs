@@ -346,14 +346,14 @@ namespace PoncePuck.Keybinds
             var cfg = DashFallMod.ConfigManager.Config;
             if (cfg == null)
             {
-                Debug.LogError("[COMPADJUST] BroadcastFeaturesToAllClients: Config is null!");
+                CompetitiveAdjustments.ConfigManager.LogError("BroadcastFeaturesToAllClients: Config is null!");
                 return;
             }
 
             var compAdjust = DashFallMod.ConfigManager.CompAdjust;
             if (compAdjust == null)
             {
-                Debug.LogError("[COMPADJUST] BroadcastFeaturesToAllClients: CompAdjust is null!");
+                CompetitiveAdjustments.ConfigManager.LogError("BroadcastFeaturesToAllClients: CompAdjust is null!");
                 return;
             }
 
@@ -377,7 +377,7 @@ namespace PoncePuck.Keybinds
             var players = PlayerManager.Instance?.GetPlayers();
             if (players == null || players.Count == 0)
             {
-                Debug.LogWarning("[COMPADJUST] No players to send features to");
+                CompetitiveAdjustments.ConfigManager.LogWarning("No players to send features to");
                 return;
             }
 

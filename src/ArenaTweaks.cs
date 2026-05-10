@@ -64,7 +64,7 @@ namespace DashFallMod
             {
                 if (enabled && effectivePrefab == null && !_loggedArenaPrefabMissing)
                 {
-                    Debug.LogWarning("[COMPADJUST] Arena visual tweaks enabled but no arena prefab found in bundle.");
+                    CompetitiveAdjustments.ConfigManager.LogWarning("Arena visual tweaks enabled but no arena prefab found in bundle.");
                     _loggedArenaPrefabMissing = true;
                 }
 
@@ -95,7 +95,7 @@ namespace DashFallMod
             {
                 if (!_loggedArenaRootMissing)
                 {
-                    Debug.LogWarning("[COMPADJUST] Could not find arena root in scene; custom arena visual not spawned.");
+                    CompetitiveAdjustments.ConfigManager.LogWarning("Could not find arena root in scene; custom arena visual not spawned.");
                     _loggedArenaRootMissing = true;
                 }
                 return;
@@ -200,7 +200,7 @@ namespace DashFallMod
                     }
                     else
                     {
-                        Debug.LogWarning("[COMPADJUST] Unified prefab 'Colliders' child has no Collider components.");
+                        CompetitiveAdjustments.ConfigManager.LogWarning("Unified prefab 'Colliders' child has no Collider components.");
                     }
                 }
                 else
@@ -360,7 +360,7 @@ namespace DashFallMod
                 }
                 else
                 {
-                    Debug.LogWarning("[COMPADJUST] Custom colliders prefab has no Collider components.");
+                    CompetitiveAdjustments.ConfigManager.LogWarning("Custom colliders prefab has no Collider components.");
                 }
             }
             else
@@ -456,7 +456,7 @@ namespace DashFallMod
                     _usingArenaVisualColliderFallback = false;
                     if (!_loggedArenaColliderFallback)
                     {
-                        Debug.LogWarning("[COMPADJUST] Scene-collider clone fallback found no source colliders to clone.");
+                        CompetitiveAdjustments.ConfigManager.LogWarning("Scene-collider clone fallback found no source colliders to clone.");
                         _loggedArenaColliderFallback = true;
                     }
                 }
@@ -1069,7 +1069,7 @@ namespace DashFallMod
             if (_disabledOriginalColliders.Count > 0)
                 Debug.Log($"[COMPADJUST] Disabled {_disabledOriginalColliders.Count} original arena colliders.");
             else
-                Debug.LogWarning("[COMPADJUST] No original arena colliders matched disable filter.");
+                CompetitiveAdjustments.ConfigManager.LogWarning("No original arena colliders matched disable filter.");
         }
 
         private static void RestoreOriginalArenaColliders()
@@ -1165,12 +1165,12 @@ namespace DashFallMod
 
             if (iceLayer < 0)
             {
-                Debug.LogWarning("[COMPADJUST] Unity layer 'Ice' not found, falling back to arena root layer.");
+                CompetitiveAdjustments.ConfigManager.LogWarning("Unity layer 'Ice' not found, falling back to arena root layer.");
                 iceLayer = fallbackLayer;
             }
             if (boardsLayer < 0)
             {
-                Debug.LogWarning("[COMPADJUST] Unity layer 'Boards' not found, falling back to arena root layer.");
+                CompetitiveAdjustments.ConfigManager.LogWarning("Unity layer 'Boards' not found, falling back to arena root layer.");
                 boardsLayer = fallbackLayer;
             }
 
@@ -1597,7 +1597,7 @@ namespace DashFallMod
                 ArenaBoundsHelper.ApplyThresholdToExisting();
 
                 _networkBoundsPatched = true;
-                Debug.Log("[COMPADJUST] Arena network bounds patches applied (precision 655→300, threshold 1mm→5mm, players excluded).");
+                CompetitiveAdjustments.ConfigManager.Log($"Arena network bounds patches applied (precision 655→{ArenaBoundsHelper.ActivePrecision}, threshold 1mm→{1000 * ArenaBoundsHelper.ActiveThreshold}mm, players excluded).");
             }
             catch (Exception ex)
             {
@@ -1618,8 +1618,7 @@ namespace DashFallMod
                 ArenaBoundsHelper.RestoreThresholdToExisting();
                 ArenaBoundsHelper.ActivePrecision = ArenaBoundsHelper.VANILLA_PRECISION;
                 ArenaBoundsHelper.ActiveThreshold = ArenaBoundsHelper.VANILLA_THRESHOLD;
-
-                Debug.Log("[COMPADJUST] Arena network bounds patches removed.");
+                CompetitiveAdjustments.ConfigManager.Log("Arena network bounds patches removed.");
             }
             catch (Exception ex)
             {
@@ -1633,6 +1632,7 @@ namespace DashFallMod
 
         private static void HandleAudioEnvironment()
         {
+            const float MAX_DISTANCE = 500f;
             if (_cachedReverbZone == null)
                 _cachedReverbZone = Resources.FindObjectsOfTypeAll<AudioReverbZone>()
                     .FirstOrDefault(o => o.gameObject.scene.IsValid());
@@ -1643,12 +1643,12 @@ namespace DashFallMod
             if (_originalReverbMaxDistance < 0f)
                 _originalReverbMaxDistance = reverbZone.maxDistance;
 
-            if (!Mathf.Approximately(reverbZone.maxDistance, 500f))
+            if (!Mathf.Approximately(reverbZone.maxDistance, MAX_DISTANCE))
             {
                 reverbZone.gameObject.SetActive(true);
                 reverbZone.transform.position = Vector3.zero;
-                reverbZone.maxDistance = 500f;
-                Debug.Log("[COMPADJUST] AudioReverbZone adjusted for expanded arena (maxDistance=500).");
+                reverbZone.maxDistance = MAX_DISTANCE;
+                CompetitiveAdjustments.ConfigManager.Log($"AudioReverbZone adjusted for expanded arena (maxDistance={MAX_DISTANCE}).");
             }
         }
 
@@ -1657,7 +1657,7 @@ namespace DashFallMod
             if (_cachedReverbZone != null && _originalReverbMaxDistance >= 0f)
             {
                 _cachedReverbZone.maxDistance = _originalReverbMaxDistance;
-                Debug.Log($"[COMPADJUST] AudioReverbZone restored to {_originalReverbMaxDistance:F0} m.");
+                CompetitiveAdjustments.ConfigManager.Log($"AudioReverbZone restored to {_originalReverbMaxDistance:F0} m.");
             }
             _cachedReverbZone = null;
             _originalReverbMaxDistance = -1f;

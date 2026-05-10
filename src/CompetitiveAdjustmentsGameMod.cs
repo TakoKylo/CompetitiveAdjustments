@@ -42,7 +42,7 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckMod
             _dashFall = new DashFallGameMod();
             if (!_dashFall.OnEnable())
             {
-                Debug.LogWarning("[COMPADJUST] DashFall sub-mod failed to enable.");
+                CompetitiveAdjustments.ConfigManager.LogWarning("DashFall sub-mod failed to enable.");
             }
 
             _lifecycleHarmony = new Harmony("CompetitiveAdjustments.Lifecycle");
@@ -53,21 +53,21 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckMod
             {
                 _tweaks = new CompetitivePuckTweaks.src.PluginCore();
                 if (!_tweaks.OnEnable())
-                    Debug.LogWarning("[COMPADJUST] Tweaks sub-mod failed to enable.");
+                    CompetitiveAdjustments.ConfigManager.LogWarning("Tweaks sub-mod failed to enable.");
             }
             else
             {
                 _companion = new CompetitiveCompanion.PluginCore();
                 if (!_companion.OnEnable())
-                    Debug.LogWarning("[COMPADJUST] Companion sub-mod failed to enable.");
+                    CompetitiveAdjustments.ConfigManager.LogWarning("Companion sub-mod failed to enable.");
             }
 
-            Debug.Log("[COMPADJUST] Enabled.");
+            CompetitiveAdjustments.ConfigManager.Log("Enabled.");
             return true;
         }
         catch (Exception ex)
         {
-            Debug.LogError("[COMPADJUST] FATAL in OnEnable: " + ex);
+            CompetitiveAdjustments.ConfigManager.LogError("FATAL in OnEnable: " + ex);
             return false;
         }
     }
@@ -82,12 +82,12 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckMod
             _tweaks?.OnDisable();
             _companion?.OnDisable();
             _instance = null;
-            Debug.Log("[COMPADJUST] Disabled.");
+            CompetitiveAdjustments.ConfigManager.Log("Disabled.");
             return true;
         }
         catch (Exception ex)
         {
-            Debug.LogError("[COMPADJUST] Error in OnDisable: " + ex);
+            CompetitiveAdjustments.ConfigManager.LogError("Error in OnDisable: " + ex);
             return false;
         }
     }
@@ -103,11 +103,11 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckMod
                 _tweaks = new CompetitivePuckTweaks.src.PluginCore();
 
             if (!_tweaks.OnEnable())
-                Debug.LogWarning("[COMPADJUST] Tweaks sub-mod failed to enable in host/practice mode.");
+                CompetitiveAdjustments.ConfigManager.LogWarning("Tweaks sub-mod failed to enable in host/practice mode.");
         }
         catch (Exception ex)
         {
-            Debug.LogError("[COMPADJUST] Failed to enable server runtime components: " + ex);
+            CompetitiveAdjustments.ConfigManager.LogError("Failed to enable server runtime components: " + ex);
         }
     }
 

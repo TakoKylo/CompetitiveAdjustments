@@ -257,7 +257,7 @@ namespace DashFallMod
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning("[COMPADJUST] Lazy config load failed: " + ex.Message);
+                    CompetitiveAdjustments.ConfigManager.LogWarning("Lazy config load failed: " + ex.Message);
                 }
             }
 
@@ -466,7 +466,7 @@ namespace DashFallMod
                         if (hasFrame || hasArena)
                         {
                             bundle = loaded;
-                            Debug.Log("[COMPADJUST] Reusing already-loaded bundle that contains frame/arena assets.");
+                            CompetitiveAdjustments.ConfigManager.Log("Reusing already-loaded bundle that contains frame/arena assets.");
                             break;
                         }
                     }
@@ -481,8 +481,8 @@ namespace DashFallMod
                     {
                         _framePrefab            = cachedFrame;
                         _arenaAndCollidersPrefab = cachedArena;
-                        if (cachedFrame != null) Debug.Log("[COMPADJUST] Goal frame prefab loaded from Tweaks cache.");
-                        if (cachedArena != null) Debug.Log("[COMPADJUST] Unified ArenaAndColliders prefab loaded from Tweaks cache.");
+                        if (cachedFrame != null) CompetitiveAdjustments.ConfigManager.Log("Goal frame prefab loaded from Tweaks cache.");
+                        if (cachedArena != null) CompetitiveAdjustments.ConfigManager.Log("Unified ArenaAndColliders prefab loaded from Tweaks cache.");
                         return;
                     }
 
@@ -494,7 +494,7 @@ namespace DashFallMod
                     }
                     else
                     {
-                        Debug.LogWarning("[COMPADJUST] AssetBundle.LoadFromFile returned null for goalframe.");
+                        CompetitiveAdjustments.ConfigManager.LogWarning("AssetBundle.LoadFromFile returned null for goalframe.");
                     }
                     return;
                 }
@@ -561,19 +561,19 @@ namespace DashFallMod
                 }
                 else
                 {
-                    Debug.Log("[COMPADJUST] Goal frame prefab loaded from bundle.");
+                    CompetitiveAdjustments.ConfigManager.Log("Goal frame prefab loaded from bundle.");
                 }
 
                 if (_arenaAndCollidersPrefab != null)
                 {
-                    Debug.Log("[COMPADJUST] Unified ArenaAndColliders prefab loaded from bundle.");
+                    CompetitiveAdjustments.ConfigManager.Log("Unified ArenaAndColliders prefab loaded from bundle.");
                 }
                 else
                 {
                     if (_arenaPrefab != null)
-                        Debug.Log("[COMPADJUST] Legacy arena prefab loaded from bundle.");
+                        CompetitiveAdjustments.ConfigManager.Log("Legacy arena prefab loaded from bundle.");
                     if (_collidersPrefab != null)
-                        Debug.Log("[COMPADJUST] Legacy colliders prefab loaded from bundle.");
+                        CompetitiveAdjustments.ConfigManager.Log("Legacy colliders prefab loaded from bundle.");
                     if (_arenaPrefab == null && _collidersPrefab == null)
                     {
                         string names = string.Join(", ", bundle.GetAllAssetNames());
