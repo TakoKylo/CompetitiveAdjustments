@@ -138,6 +138,13 @@ namespace CompetitiveAdjustments
         public float PostSlideTurnAcceleration = 2.5f;
         public float PostSlideBrakeAcceleration = 8f;
 
+        // --- Stamina ---
+        public float StaminaRegenerationRate = 10f;
+        public float SprintStaminaDrainRate = 1.4f;
+        public float JumpStaminaDrain = 0.125f;
+        public float TwistStaminaDrain = 0.125f;
+        public float DashStaminaDrain = 0.125f;
+
         // --- Player Body ---
         public float SlideTurnMultiplier = 2f;
         public float StopDrag = 2.5f;
