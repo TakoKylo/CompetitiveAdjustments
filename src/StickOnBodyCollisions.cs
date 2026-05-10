@@ -1,15 +1,35 @@
 ﻿using HarmonyLib;
+using UnityEngine;
 
 namespace CompetitivePuckTweaks.src {
-    internal class StickOnBodyCollisions {
+    public class StickOnBodyCollisions {
+        private const float STICK_FORCE_SOUND_THRESHOLD = 17f;
+        private const int STICK_LAYER = 6;
+
+        private static readonly bool _disablePatch = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust.StickBodyCollision == null || !(bool)CompetitiveAdjustments.ConfigManager.Config?.CompAdjust.StickBodyCollision;
+
         [HarmonyPatch(typeof(PlayerBodyV2), "OnNetworkPostSpawn")]
         public class PlayerBodyV2_OnNetworkPostSpawn_Patch {
             [HarmonyPostfix]
             public static void Postfix(PlayerBodyV2 __instance) {
-                if (CompetitiveAdjustments.ConfigManager.Config?.CompAdjust.StickBodyCollision == null || !(bool)CompetitiveAdjustments.ConfigManager.Config?.CompAdjust.StickBodyCollision)
+                if (_disablePatch)
                     return;
 
                 __instance.Rigidbody.mass = float.MaxValue;
+            }
+        }
+
+        [HarmonyPatch(typeof(PlayerBodyV2), "Server_OnCollisionDeferred")]
+        public class PlayerBodyV2_Server_OnCollisionDeferred_Patch {
+            [HarmonyPrefix]
+            public static bool Prefix(GameObject gameObject, float force) {
+                if (_disablePatch)
+                    return true;
+
+                if (gameObject.layer == STICK_LAYER && force < STICK_FORCE_SOUND_THRESHOLD)
+                    return false;
+
+                return true;
             }
         }
     }
