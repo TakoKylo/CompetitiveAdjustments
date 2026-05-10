@@ -14,19 +14,19 @@ namespace CompetitivePuckTweaks.src {
                 Type playerBodyType = typeof(PlayerBody);
 
                 FieldInfo staminaRegenerationRateField = playerBodyType.GetField("staminaRegenerationRate", BindingFlags.NonPublic | BindingFlags.Instance);
-                staminaRegenerationRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config?.CompTweaks.StaminaRegenerationRate);
+                staminaRegenerationRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.StaminaRegenerationRate);
 
                 FieldInfo sprintStaminaDrainRateField = playerBodyType.GetField("sprintStaminaDrainRate", BindingFlags.NonPublic | BindingFlags.Instance);
-                sprintStaminaDrainRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config?.CompTweaks.SprintStaminaDrainRate);
+                sprintStaminaDrainRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRate);
 
                 FieldInfo jumpStaminaDrainField = playerBodyType.GetField("jumpStaminaDrain", BindingFlags.NonPublic | BindingFlags.Instance);
-                jumpStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config?.CompTweaks.JumpStaminaDrain);
+                jumpStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.JumpStaminaDrain);
 
                 FieldInfo twistStaminaDrainField = playerBodyType.GetField("twistStaminaDrain", BindingFlags.NonPublic | BindingFlags.Instance);
-                twistStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config?.CompTweaks.TwistStaminaDrain);
+                twistStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.TwistStaminaDrain);
 
                 FieldInfo dashStaminaDrainField = playerBodyType.GetField("dashStaminaDrain", BindingFlags.NonPublic | BindingFlags.Instance);
-                dashStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config?.CompTweaks.DashStaminaDrain);
+                dashStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.DashStaminaDrain);
 
                 CompetitiveAdjustments.ConfigManager.Dbg($"Adjusted stamina related values on PlayerBody {__instance.name}");
 
