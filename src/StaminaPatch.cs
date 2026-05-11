@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using System;
 using System.Reflection;
+using UnityEngine;
 
 namespace CompetitivePuckTweaks.src {
     public class StaminaPatch {
@@ -33,5 +34,19 @@ namespace CompetitivePuckTweaks.src {
                 return true;
             }
         }
+
+        /*[HarmonyPatch(typeof(PlayerBody), "FixedUpdate")]
+        public class PlayerBody_FixedUpdate_Patch {
+            [HarmonyPrefix]
+            public static bool Prefix(PlayerBody __instance) {
+                if (CompetitiveAdjustments.ConfigManager.Config == null)
+                    return true;
+
+                if (__instance.IsSprinting.Value)
+                    __instance.Stamina.Value += Time.deltaTime * (1f / CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRateOffset);
+
+                return true;
+            }
+        }*/
     }
 }
