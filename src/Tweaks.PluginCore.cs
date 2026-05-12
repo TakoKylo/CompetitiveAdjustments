@@ -708,7 +708,7 @@ namespace CompetitivePuckTweaks.src
                                 // (Layer remains unchanged from game default)
                                 mc.enabled = false;
                                 mc.enabled = true;
-                                Log($"[TorsoRefresh] Custom collider. convex={mc.convex} layer={mc.gameObject.layer} bounds={mc.bounds}");
+                                Dbg($"[TorsoRefresh] Custom collider. convex={mc.convex} layer={mc.gameObject.layer} bounds={mc.bounds}");
                                 TorsoDebugBrush.Sync(mc);
                             }
                         }
@@ -722,7 +722,7 @@ namespace CompetitivePuckTweaks.src
                             mc.enabled = false;
                             mc.enabled = true;
                             TorsoDebugBrush.Sync(mc);
-                            Log($"[TorsoRefresh] Restored original collider for {body.name}.");
+                            Dbg($"[TorsoRefresh] Restored original collider for {body.name}.");
                         }
                     }
 
@@ -749,7 +749,7 @@ namespace CompetitivePuckTweaks.src
                             mf.transform.localPosition = Vector3.zero;
                             mf.transform.localRotation = Quaternion.identity;
                         }
-                        Log($"[TorsoRefresh] body={body.name} useCustom={useCustom} visualDisabled={TorsoVisualDisabled}");
+                        Dbg($"[TorsoRefresh] body={body.name} useCustom={useCustom} visualDisabled={TorsoVisualDisabled}");
                     }
                 }
             }
