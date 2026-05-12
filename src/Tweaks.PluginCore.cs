@@ -390,6 +390,11 @@ namespace CompetitivePuckTweaks.src
             Debug.Log($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] " + message);
         }
 
+        public static void Dbg(string message) {
+            if (CompetitiveAdjustments.ConfigManager.Config.Dashfall.EnableDebugLogs)
+                Log(message);
+        }
+
         /// <summary>
         /// Sends named custom message for syncing client config with server
         /// </summary>
@@ -401,29 +406,12 @@ namespace CompetitivePuckTweaks.src
                 Log("Config sync skipped: clientId missing from event payload.");
                 return;
             }
-            Log($"Sending config sync message to client {targetId}...");
-            
-            ConfigSyncPackage messageContent = new ConfigSyncPackage(config, CompetitiveAdjustments.ConfigManager.Config?.CompAdjust);
-            var writer = new FastBufferWriter(1024, Unity.Collections.Allocator.Temp);
-            var customMessagingManager = NetworkManager.Singleton?.CustomMessagingManager;
-            if (customMessagingManager == null)
-            {
-                Log("Config sync skipped: CustomMessagingManager is null.");
-                writer.Dispose();
-                return;
-            }
-
-            using (writer)
-            {
-                writer.WriteValueSafe(messageContent);
-                customMessagingManager.SendNamedMessage(CMM_SYNC_CONFIG, targetId, writer);
-                Log($"Config sync sent to client {targetId}");
-            }
+            ManualSync(targetId);
         }
 
         public static void ManualSync(ulong targetId)
         {
-            Log($"Sending config sync message to client {targetId}...");
+            Dbg($"Sending config sync message to client {targetId}...");
             
             ConfigSyncPackage messageContent = new ConfigSyncPackage(config, CompetitiveAdjustments.ConfigManager.Config?.CompAdjust);
             var writer = new FastBufferWriter(1024, Unity.Collections.Allocator.Temp);
@@ -439,7 +427,7 @@ namespace CompetitivePuckTweaks.src
             {
                 writer.WriteValueSafe(messageContent);
                 customMessagingManager.SendNamedMessage(CMM_SYNC_CONFIG, targetId, writer);
-                Log($"Config sync sent to client {targetId}");
+                Dbg($"Config sync sent to client {targetId}");
             }
         }
 

@@ -91,7 +91,7 @@ namespace CompetitivePuckTweaks.src
                 rb.isKinematic = true;
             }
             
-            PluginCore.Log($"Applied soft board physics to {collider.name} (bounciness: {boardMaterial.bounciness}, friction: {boardMaterial.dynamicFriction})");
+            PluginCore.Dbg($"Applied soft board physics to {collider.name} (bounciness: {boardMaterial.bounciness}, friction: {boardMaterial.dynamicFriction})");
         }
     }
 }
