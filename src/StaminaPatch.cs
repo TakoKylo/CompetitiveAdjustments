@@ -6,7 +6,7 @@ using UnityEngine;
 namespace CompetitivePuckTweaks.src {
     public class StaminaPatch {
         [HarmonyPatch(typeof(PlayerBody), nameof(PlayerBody.OnNetworkSpawn))]
-        public class PlayerBody_OnNetworkSpawn_Patch {
+        public static class PlayerBody_OnNetworkSpawn_Patch {
             [HarmonyPrefix]
             public static bool Prefix(PlayerBody __instance) {
                 if (CompetitiveAdjustments.ConfigManager.Config == null)
@@ -35,18 +35,24 @@ namespace CompetitivePuckTweaks.src {
             }
         }
 
-        /*[HarmonyPatch(typeof(PlayerBody), "FixedUpdate")]
-        public class PlayerBody_FixedUpdate_Patch {
+        [HarmonyPatch(typeof(PlayerBody), "FixedUpdate")]
+        public static class PlayerBody_FixedUpdate_Patch {
+            private static int _frame = 0;
             [HarmonyPrefix]
             public static bool Prefix(PlayerBody __instance) {
                 if (CompetitiveAdjustments.ConfigManager.Config == null)
                     return true;
 
-                if (__instance.IsSprinting.Value)
-                    __instance.Stamina.Value += Time.deltaTime * (1f / CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRateOffset);
+                
+                if (__instance.IsSprinting.Value) {
+                    if (++_frame % 2 == 0)
+                        __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRateOffset * 2;
+                }
+                else
+                    _frame = 0;
 
                 return true;
             }
-        }*/
+        }
     }
 }
