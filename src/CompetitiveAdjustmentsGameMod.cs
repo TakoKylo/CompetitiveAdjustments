@@ -11,7 +11,7 @@ using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-public sealed class CompetitiveAdjustmentsGameMod : IPuckMod
+public sealed class CompetitiveAdjustmentsGameMod : IPuckPlugin
 {
     private static CompetitiveAdjustmentsGameMod _instance;
     private Harmony _lifecycleHarmony;

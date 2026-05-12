@@ -15,7 +15,7 @@ namespace CompetitivePuckTweaks.src
             // Use synced client config (PuckScale) if available, else fall back to server config
             float puckScale = GetSyncedPuckScale();
             __instance.transform.localScale = new UnityEngine.Vector3(puckScale, puckScale, puckScale);
-            PluginCore.Log($"Puck scaled to {puckScale}");
+            PluginCore.Dbg($"Puck scaled to {puckScale}");
             ___maxSpeed = PluginCore.config.PuckMaxSpeed;
             ___stickTensor = new UnityEngine.Vector3(PluginCore.config.PuckStickTensorX,
                 PluginCore.config.PuckStickTensorY, PluginCore.config.PuckStickTensorZ);

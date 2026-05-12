@@ -141,6 +141,7 @@ namespace CompetitiveAdjustments
         // --- Stamina ---
         public float StaminaRegenerationRate = 10f;
         public float SprintStaminaDrainRate = 1.4f;
+        public float SprintStaminaDrainRateOffset = 0;
         public float JumpStaminaDrain = 0.125f;
         public float TwistStaminaDrain = 0.125f;
         public float DashStaminaDrain = 0.125f;

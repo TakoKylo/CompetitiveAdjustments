@@ -1,11 +1,12 @@
 ﻿using HarmonyLib;
 using System;
 using System.Reflection;
+using UnityEngine;
 
 namespace CompetitivePuckTweaks.src {
     public class StaminaPatch {
         [HarmonyPatch(typeof(PlayerBody), nameof(PlayerBody.OnNetworkSpawn))]
-        public class PlayerBody_OnNetworkSpawn_Patch {
+        public static class PlayerBody_OnNetworkSpawn_Patch {
             [HarmonyPrefix]
             public static bool Prefix(PlayerBody __instance) {
                 if (CompetitiveAdjustments.ConfigManager.Config == null)
@@ -14,21 +15,41 @@ namespace CompetitivePuckTweaks.src {
                 Type playerBodyType = typeof(PlayerBody);
 
                 FieldInfo staminaRegenerationRateField = playerBodyType.GetField("staminaRegenerationRate", BindingFlags.NonPublic | BindingFlags.Instance);
-                staminaRegenerationRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config?.CompTweaks.StaminaRegenerationRate);
+                staminaRegenerationRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.StaminaRegenerationRate);
 
                 FieldInfo sprintStaminaDrainRateField = playerBodyType.GetField("sprintStaminaDrainRate", BindingFlags.NonPublic | BindingFlags.Instance);
-                sprintStaminaDrainRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config?.CompTweaks.SprintStaminaDrainRate);
+                sprintStaminaDrainRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRate);
 
                 FieldInfo jumpStaminaDrainField = playerBodyType.GetField("jumpStaminaDrain", BindingFlags.NonPublic | BindingFlags.Instance);
-                jumpStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config?.CompTweaks.JumpStaminaDrain);
+                jumpStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.JumpStaminaDrain);
 
                 FieldInfo twistStaminaDrainField = playerBodyType.GetField("twistStaminaDrain", BindingFlags.NonPublic | BindingFlags.Instance);
-                twistStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config?.CompTweaks.TwistStaminaDrain);
+                twistStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.TwistStaminaDrain);
 
                 FieldInfo dashStaminaDrainField = playerBodyType.GetField("dashStaminaDrain", BindingFlags.NonPublic | BindingFlags.Instance);
-                dashStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config?.CompTweaks.DashStaminaDrain);
+                dashStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.DashStaminaDrain);
 
                 CompetitiveAdjustments.ConfigManager.Dbg($"Adjusted stamina related values on PlayerBody {__instance.name}");
+
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(PlayerBody), "FixedUpdate")]
+        public static class PlayerBody_FixedUpdate_Patch {
+            private static int _frame = 0;
+            [HarmonyPrefix]
+            public static bool Prefix(PlayerBody __instance) {
+                if (CompetitiveAdjustments.ConfigManager.Config == null)
+                    return true;
+
+                
+                if (__instance.IsSprinting.Value) {
+                    if (++_frame % 2 == 0)
+                        __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRateOffset * 2;
+                }
+                else
+                    _frame = 0;
 
                 return true;
             }
