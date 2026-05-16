@@ -60,8 +60,12 @@ namespace CompetitivePuckTweaks.src {
 
                 if (__instance.IsSprinting.Value) {
                     frame++;
-                    if (frame % 2 == 0)
-                        __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRateOffset * 2;
+                    if (frame % 2 == 0) {
+                        if (__instance.name.ToLower().Contains("goalie"))
+                            __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.Config.CompTweaks.GoalieSprintStaminaDrainRateOffset * 2;
+                        else
+                            __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRateOffset * 2;
+                    }
                 }
                 else
                     frame = 0;
