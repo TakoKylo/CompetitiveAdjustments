@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
@@ -11,6 +12,14 @@ namespace CompetitivePuckTweaks.src {
             public static bool Prefix(PlayerBody __instance) {
                 if (CompetitiveAdjustments.ConfigManager.Config == null)
                     return true;
+
+                // Goalie and attacker ship as separate prefabs with their own [SerializeField]
+                // stamina values. Overwriting them on goalies forces them to skater values
+                // (notably dashStaminaDrain), which makes goalie dashes cost less than base game.
+                if (__instance.name.Contains("Goalie")) {
+                    CompetitiveAdjustments.ConfigManager.Dbg($"Skipped stamina override on goalie PlayerBody {__instance.name}");
+                    return true;
+                }
 
                 Type playerBodyType = typeof(PlayerBody);
 
@@ -37,21 +46,36 @@ namespace CompetitivePuckTweaks.src {
 
         [HarmonyPatch(typeof(PlayerBody), "FixedUpdate")]
         public static class PlayerBody_FixedUpdate_Patch {
-            private static int _frame = 0;
+            internal static readonly Dictionary<ulong, int> _frames = new Dictionary<ulong, int>();
+
             [HarmonyPrefix]
             public static bool Prefix(PlayerBody __instance) {
                 if (CompetitiveAdjustments.ConfigManager.Config == null)
                     return true;
 
-                
+                ulong id = __instance.NetworkObjectId;
                 if (__instance.IsSprinting.Value) {
-                    if (++_frame % 2 == 0)
+                    _frames.TryGetValue(id, out int frame);
+                    frame++;
+                    _frames[id] = frame;
+                    if (frame % 2 == 0)
                         __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRateOffset * 2;
                 }
                 else
-                    _frame = 0;
+                    _frames[id] = 0;
 
                 return true;
+            }
+        }
+
+        // Clear per-player sprint-frame counters when the game ends so stale
+        // NetworkObjectIds from prior matches don't leak across games.
+        [HarmonyPatch(typeof(GameManager), nameof(GameManager.Server_SetGameState))]
+        public static class GameManager_Server_SetGameState_Patch {
+            [HarmonyPostfix]
+            public static void Postfix(GamePhase? phase) {
+                if (phase == GamePhase.GameOver)
+                    PlayerBody_FixedUpdate_Patch._frames.Clear();
             }
         }
     }
