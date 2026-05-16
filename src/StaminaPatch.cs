@@ -3,9 +3,12 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
 
 namespace CompetitivePuckTweaks.src {
     public class StaminaPatch {
+        private static readonly LockDictionary<ulong, int> _frames = new LockDictionary<ulong, int>();
+
         [HarmonyPatch(typeof(PlayerBody), nameof(PlayerBody.OnNetworkSpawn))]
         public static class PlayerBody_OnNetworkSpawn_Patch {
             [HarmonyPrefix]
@@ -16,8 +19,8 @@ namespace CompetitivePuckTweaks.src {
                 // Goalie and attacker ship as separate prefabs with their own [SerializeField]
                 // stamina values. Overwriting them on goalies forces them to skater values
                 // (notably dashStaminaDrain), which makes goalie dashes cost less than base game.
-                if (__instance.name.Contains("Goalie")) {
-                    CompetitiveAdjustments.ConfigManager.Dbg($"Skipped stamina override on goalie PlayerBody {__instance.name}");
+                if (__instance.name.ToLower().Contains("goalie")) {
+                    CompetitiveAdjustments.ConfigManager.Dbg($"Skipped stamina override on goalie PlayerBody {__instance.name}.");
                     return true;
                 }
 
@@ -46,23 +49,25 @@ namespace CompetitivePuckTweaks.src {
 
         [HarmonyPatch(typeof(PlayerBody), "FixedUpdate")]
         public static class PlayerBody_FixedUpdate_Patch {
-            internal static readonly Dictionary<ulong, int> _frames = new Dictionary<ulong, int>();
-
             [HarmonyPrefix]
             public static bool Prefix(PlayerBody __instance) {
                 if (CompetitiveAdjustments.ConfigManager.Config == null)
                     return true;
 
-                ulong id = __instance.NetworkObjectId;
+                if (!_frames.TryGetValue(__instance.NetworkObjectId, out int frame)) {
+                    frame = 0;
+                    _frames.Add(__instance.NetworkObjectId, frame);
+                }
+
                 if (__instance.IsSprinting.Value) {
-                    _frames.TryGetValue(id, out int frame);
                     frame++;
-                    _frames[id] = frame;
                     if (frame % 2 == 0)
                         __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRateOffset * 2;
                 }
                 else
-                    _frames[id] = 0;
+                    frame = 0;
+
+                _frames[__instance.NetworkObjectId] = frame;
 
                 return true;
             }
@@ -73,9 +78,9 @@ namespace CompetitivePuckTweaks.src {
         [HarmonyPatch(typeof(GameManager), nameof(GameManager.Server_SetGameState))]
         public static class GameManager_Server_SetGameState_Patch {
             [HarmonyPostfix]
-            public static void Postfix(GamePhase? phase) {
+            public static void Postfix(GamePhase? phase, int? tick, int? period, int? blueScore, int? redScore, bool? isOvertime) {
                 if (phase == GamePhase.GameOver)
-                    PlayerBody_FixedUpdate_Patch._frames.Clear();
+                    _frames.Clear();
             }
         }
     }
