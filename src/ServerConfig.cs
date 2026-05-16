@@ -108,31 +108,41 @@ namespace CompetitiveAdjustments
         public float TurnBrakeAccelerationScaling = 0f;
         public float TurnMaxSpeedScaling = 0f;
         public float TurnDrag = 3f;
+
         public float GoalieTurnAcceleration = 1.825f;
         public float GoalieTurnBrakeAcceleration = 5.8f;
         public float GoalieTurnMaxSpeed = 1.48f;
         public float GoalieTurnDrag = 3f;
+
         public float MaxBackwardsSpeed = 7.5f;
         public float MaxBackwardsSprintSpeed = 8.75f;
+
         public float GoalieMaxForwardsSpeed = 5f;
         public float GoalieMaxForwardsSprintSpeed = 6f;
         public float GoalieMaxBackwardsSpeed = 5f;
         public float GoalieMaxBackwardsSprintSpeed = 6f;
+
         public float AngularForceMultiplier = 5.1f;
+
         public float ForwardsAccelerationBase = 2f;
         public float ForwardsSprintAccelerationBase = 4.75f;
         public float ForwardsAccelerationMin = 2f;
         public float ForwardsSprintAccelerationMin = 4f;
+
         public float BackwardsAccelerationBase = 1.8f;
         public float BackwardsAccelerationMin = 1.8f;
         public float BackwardsSprintAccelerationBase = 2f;
         public float BackwardsSprintAccelerationMin = 2f;
+
         public float ForwardsAccelerationScaling = 0;
         public float ForwardsSprintAccelerationScaling = 0;
+
         public float BackwardsAccelerationScaling = 0;
         public float BackwardsSprintAccelerationScaling = 0;
+
         public float MaxForwardsSpeed = 7.5f;
         public float MaxForwardsSprintSpeed = 8.75f;
+
         public float PostSlideTurnTime = 0.35f;
         public float PostSlideTurnMax = 1.75f;
         public float PostSlideTurnAcceleration = 2.5f;
@@ -145,6 +155,13 @@ namespace CompetitiveAdjustments
         public float JumpStaminaDrain = 0.125f;
         public float TwistStaminaDrain = 0.125f;
         public float DashStaminaDrain = 0.125f;
+
+        public float GoalieStaminaRegenerationRate = 10f;
+        public float GoalieSprintStaminaDrainRate = 1.4f;
+        public float GoalieSprintStaminaDrainRateOffset = 0;
+        public float GoalieJumpStaminaDrain = 0.125f;
+        public float GoalieTwistStaminaDrain = 0.125f;
+        public float GoalieDashStaminaDrain = 0.25f;
 
         // --- Player Body ---
         public float SlideTurnMultiplier = 2f;
