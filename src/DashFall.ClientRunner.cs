@@ -168,15 +168,17 @@ namespace DashFallMod.Client
                 return;
             }
 
-            var cfg = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust;
-            if (cfg == null || !cfg.EnableArenaTweaks)
+            // Pull the arena scale from the effective source: local config when hosting,
+            // synced values when joined to a modded server, or "vanilla rink" (returns
+            // false) when joined to a vanilla server.  Without this gate the local
+            // config was applied to vanilla servers, stretching the minimap to match
+            // an arena that does not exist on that server.
+            if (!GoalNetTweaks.TryGetEffectiveArenaScale(out float scaleX, out float scaleY))
             {
                 ResetMinimapScale();
                 return;
             }
 
-            float scaleX = cfg.ArenaScaleX > 0f ? cfg.ArenaScaleX : 1f;
-            float scaleY = cfg.ArenaScaleY > 0f ? cfg.ArenaScaleY : 1f;
             if (Mathf.Approximately(scaleX, 1f) && Mathf.Approximately(scaleY, 1f))
             {
                 ResetMinimapScale();

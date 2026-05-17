@@ -210,6 +210,36 @@ namespace DashFallMod
             _forceNextRefresh = true;
         }
 
+        /// <summary>
+        /// Returns the arena scale that should drive client-side visuals (minimap,
+        /// clip brushes, etc.) on the current connection.  On a host/server we use
+        /// the local config; on a client joined to a modded server we use the
+        /// synced values; on a client joined to a vanilla server (no sync ever
+        /// arrived) we return false so callers treat the rink as vanilla rather
+        /// than applying the user's local config to a vanilla rink.
+        /// </summary>
+        public static bool TryGetEffectiveArenaScale(out float scaleX, out float scaleY)
+        {
+            scaleX = 1f;
+            scaleY = 1f;
+            var nm = NetworkManager.Singleton;
+            if (nm == null) return false;
+
+            if (nm.IsServer)
+            {
+                var cfg = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust;
+                if (cfg == null || !cfg.EnableArenaTweaks) return false;
+                scaleX = cfg.ArenaScaleX > 0f ? cfg.ArenaScaleX : 1f;
+                scaleY = cfg.ArenaScaleY > 0f ? cfg.ArenaScaleY : 1f;
+                return true;
+            }
+
+            if (!_hasSyncedTweaks || !_syncedEnableArenaTweaks) return false;
+            scaleX = _syncedArenaScaleX > 0f ? _syncedArenaScaleX : 1f;
+            scaleY = _syncedArenaScaleY > 0f ? _syncedArenaScaleY : 1f;
+            return true;
+        }
+
         [HarmonyPostfix]
         public static void Postfix()
         {
@@ -262,15 +292,21 @@ namespace DashFallMod
             }
 
             var cfg = CompetitiveAdjustments.ConfigManager.Config.CompAdjust;
-            bool useSynced = _hasSyncedTweaks && (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer);
+            var nm = NetworkManager.Singleton;
+            bool useSynced = _hasSyncedTweaks && (nm != null && !nm.IsServer);
+            // Distinguish "I am the host, local config is truth" (legitimate) from
+            // "I am a client and the server has not sent PPKB/GoalTweaks" (vanilla
+            // server -- must NOT apply local config).  Without this both cases
+            // collapse to useSynced=false and read potentially polluted local config.
+            bool clientUnsynced = nm != null && !nm.IsServer && !_hasSyncedTweaks;
 
-            bool enabled         = useSynced ? _syncedEnableGoalNetTweaks       : cfg.EnableGoalNetTweaks;
+            bool enabled         = clientUnsynced ? false : (useSynced ? _syncedEnableGoalNetTweaks       : cfg.EnableGoalNetTweaks);
             float thicknessScale = Mathf.Max(0.05f, useSynced ? _syncedGoalThicknessScale : cfg.GoalThicknessScale);
             float scaleX         = Mathf.Max(0.1f,  useSynced ? _syncedGoalSizeScaleX        : cfg.GoalSizeScaleX);
             float scaleY         = Mathf.Max(0.1f,  useSynced ? _syncedGoalSizeScaleY        : cfg.GoalSizeScaleY);
             float scaleZ         = Mathf.Max(0.1f,  useSynced ? _syncedGoalSizeScaleZ        : cfg.GoalSizeScaleZ);
             float goalBackOffset = useSynced ? _syncedGoalBackOffset : cfg.GoalBackOffset;
-            bool arenaEnabled    = useSynced ? _syncedEnableArenaTweaks  : cfg.EnableArenaTweaks;
+            bool arenaEnabled    = clientUnsynced ? false : (useSynced ? _syncedEnableArenaTweaks  : cfg.EnableArenaTweaks);
             float arenaScaleX    = Mathf.Max(0.1f, useSynced ? _syncedArenaScaleX : cfg.ArenaScaleX);
             float arenaScaleY    = Mathf.Max(0.1f, useSynced ? _syncedArenaScaleY : cfg.ArenaScaleY);
             float arenaScaleZ    = Mathf.Max(0.1f, useSynced ? _syncedArenaScaleZ : cfg.ArenaScaleZ);

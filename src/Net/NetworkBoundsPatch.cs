@@ -1,0 +1,175 @@
+using System;
+using HarmonyLib;
+using UnityEngine;
+
+namespace DashFallMod.Net
+{
+    /// <summary>
+    /// Extends Puck's network position quantisation so the arena reaches
+    /// arbitrary distances from the rink centre without losing precision.
+    ///
+    /// Vanilla Puck quantises positions through SynchronizedObjectManager:
+    ///     short encoded = (short)(position * 655f);
+    /// shorts are signed 16-bit so the maximum representable position is
+    ///     32767 / 655 ~= 50 m
+    /// We Harmony-prefix both <c>EncodeSynchronizedObject</c> and
+    /// <c>DecodeSynchronizedObjectData</c>, write our own quantisation into
+    /// <c>__result</c>, and return false to skip the original body entirely.
+    /// Our prefix calls <see cref="ChunkRegistry"/>'s axis helpers, which
+    /// subtract / add a per-object chunk offset before / after the 16-bit
+    /// clamp.  Range becomes +/-4 km (at sbyte chunk-index resolution) while
+    /// keeping vanilla 1.5 mm precision.
+    /// </summary>
+    public static class NetworkBoundsPatch
+    {
+        private const float VANILLA_PRECISION = 655f;
+
+        public static bool ChunksEnabled => ChunkRegistry.ChunksActive;
+
+        private static Harmony _harmony;
+        private static bool _patched;
+
+        /// <summary>
+        /// Install the Harmony prefixes.  Safe to call repeatedly.  Should be
+        /// called from both server and client because encode/decode share a
+        /// single implementation -- if either side runs vanilla while the
+        /// other runs patched, every networked position will appear scaled
+        /// or offset wrong.
+        /// </summary>
+        public static void EnsurePatched()
+        {
+            if (_patched) return;
+
+            try
+            {
+                if (_harmony == null)
+                    _harmony = new Harmony("compadjust.networkbounds");
+
+                var encode = AccessTools.Method(typeof(SynchronizedObjectManager), "EncodeSynchronizedObject");
+                var decode = AccessTools.Method(typeof(SynchronizedObjectManager), "DecodeSynchronizedObjectData");
+
+                if (encode == null || decode == null)
+                {
+                    Debug.LogWarning("[COMPADJUST] Could not find SynchronizedObjectManager encode/decode methods -- chunked sync disabled.");
+                    return;
+                }
+
+                _harmony.Patch(encode,
+                    prefix: new HarmonyMethod(typeof(NetworkBoundsPatch), nameof(EncodePrefix)));
+                _harmony.Patch(decode,
+                    prefix: new HarmonyMethod(typeof(NetworkBoundsPatch), nameof(DecodePrefix)));
+
+                _patched = true;
+                CompetitiveAdjustments.ConfigManager.Log("NetworkBoundsPatch: full-replacement prefixes installed on EncodeSynchronizedObject / DecodeSynchronizedObjectData.");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[COMPADJUST] Failed to apply network bounds patches: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Activate chunked sync mode.  Precision stays at 655 (the chunked
+        /// mode's whole purpose is to keep vanilla precision), per-object
+        /// offsets become live, and the server-side hysteresis sweep starts
+        /// announcing chunk changes.  Idempotent.
+        /// </summary>
+        public static void EnableOpenWorldPrecision()
+        {
+            EnsurePatched();
+
+            ChunkRegistry.ActivePrecision = VANILLA_PRECISION;
+            ChunkRegistry.ChunksActive = true;
+
+            ChunkSyncServer.Enable();
+            ChunkSyncClient.Enable();
+
+            CompetitiveAdjustments.ConfigManager.Log($"Chunked network sync ACTIVE -- precision {VANILLA_PRECISION} (1.5 mm grid), chunk size {ChunkRegistry.ChunkSizeMeters} m.");
+        }
+
+        /// <summary>Returns to vanilla precision with no chunking.</summary>
+        public static void RestoreVanillaPrecision()
+        {
+            ChunkSyncServer.Disable();
+            ChunkSyncClient.Disable();
+            ChunkRegistry.ChunksActive = false;
+            ChunkRegistry.Clear();
+            ChunkRegistry.ActivePrecision = VANILLA_PRECISION;
+            CompetitiveAdjustments.ConfigManager.Log($"Network precision restored to vanilla {VANILLA_PRECISION} (chunks disabled).");
+        }
+
+        /// <summary>Full teardown -- unpatches Harmony and clears all state.  Idempotent.</summary>
+        public static void Disable()
+        {
+            if (!_patched) return;
+
+            ChunkSyncServer.Disable();
+            ChunkSyncClient.Disable();
+            ChunkRegistry.ChunksActive = false;
+            ChunkRegistry.Clear();
+            ChunkRegistry.ActivePrecision = VANILLA_PRECISION;
+
+            if (_harmony != null)
+            {
+                try { _harmony.UnpatchSelf(); }
+                catch (Exception ex) { Debug.LogWarning("[COMPADJUST] UnpatchSelf failed: " + ex.Message); }
+                _harmony = null;
+            }
+
+            _patched = false;
+            CompetitiveAdjustments.ConfigManager.Log("NetworkBoundsPatch fully disabled.");
+        }
+
+        // ──────────────────────────────────────────────────────────────────
+        // Harmony prefixes -- full-replacement encode / decode.
+        // ──────────────────────────────────────────────────────────────────
+
+        public static bool EncodePrefix(
+            ulong networkObjectId,
+            Vector3 position,
+            Quaternion rotation,
+            ref System.ValueTuple<ushort, short[], short[]> __result)
+        {
+            ushort id = (ushort)networkObjectId;
+
+            short rx = (short)(rotation.x * 32767f);
+            short ry = (short)(rotation.y * 32767f);
+            short rz = (short)(rotation.z * 32767f);
+            short rw = (short)(rotation.w * 32767f);
+
+            short px = ChunkRegistry.EncodeX(position.x, id);
+            short py = ChunkRegistry.EncodeY(position.y);
+            short pz = ChunkRegistry.EncodeZ(position.z, id);
+
+            __result = new System.ValueTuple<ushort, short[], short[]>(
+                id,
+                new short[] { px, py, pz },
+                new short[] { rx, ry, rz, rw });
+
+            return false;
+        }
+
+        public static bool DecodePrefix(
+            SynchronizedObjectData synchronizedObjectData,
+            ref System.ValueTuple<ushort, Vector3, Quaternion> __result)
+        {
+            ushort id = synchronizedObjectData.NetworkObjectId;
+
+            float rx = synchronizedObjectData.Rx / 32767f;
+            float ry = synchronizedObjectData.Ry / 32767f;
+            float rz = synchronizedObjectData.Rz / 32767f;
+            float rw = synchronizedObjectData.Rw / 32767f;
+
+            float px = ChunkRegistry.DecodeX(synchronizedObjectData.X, id);
+            float py = ChunkRegistry.DecodeY(synchronizedObjectData.Y);
+            float pz = ChunkRegistry.DecodeZ(synchronizedObjectData.Z, id);
+
+            __result = new System.ValueTuple<ushort, Vector3, Quaternion>(
+                id,
+                new Vector3(px, py, pz),
+                new Quaternion(rx, ry, rz, rw));
+
+            return false;
+        }
+    }
+}
