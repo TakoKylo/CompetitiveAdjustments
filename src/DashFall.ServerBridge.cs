@@ -350,7 +350,7 @@ namespace PoncePuck.Keybinds
                 return;
             }
 
-            var compAdjust = DashFallMod.ConfigManager.CompAdjust;
+            var compAdjust = DashFallMod.ConfigManager.CompAdjustEffective;
             if (compAdjust == null)
             {
                 CompetitiveAdjustments.ConfigManager.LogError("BroadcastFeaturesToAllClients: CompAdjust is null!");
@@ -392,7 +392,7 @@ namespace PoncePuck.Keybinds
             var nm = NetworkManager.Singleton;
             if (nm == null || !nm.IsServer || _cmm == null) return;
 
-            var cfg = DashFallMod.ConfigManager.CompAdjust;
+            var cfg = DashFallMod.ConfigManager.CompAdjustEffective;
 
             foreach (var player in PlayerManager.Instance.GetPlayers())
             {

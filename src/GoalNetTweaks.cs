@@ -227,7 +227,8 @@ namespace DashFallMod
 
             if (nm.IsServer)
             {
-                var cfg = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust;
+                // Effective so EnableCompAdjust=false also returns vanilla here.
+                var cfg = CompetitiveAdjustments.ConfigManager.CompAdjustEffective;
                 if (cfg == null || !cfg.EnableArenaTweaks) return false;
                 scaleX = cfg.ArenaScaleX > 0f ? cfg.ArenaScaleX : 1f;
                 scaleY = cfg.ArenaScaleY > 0f ? cfg.ArenaScaleY : 1f;
@@ -291,7 +292,11 @@ namespace DashFallMod
                 }
             }
 
-            var cfg = CompetitiveAdjustments.ConfigManager.Config.CompAdjust;
+            // Effective on the host path so EnableCompAdjust=false collapses
+            // arena/goal scaling to vanilla without rewriting every field check.
+            // Synced path is unaffected because the server's broadcaster also
+            // reads CompAdjustEffective when sending PPKB/GoalTweaks.
+            var cfg = CompetitiveAdjustments.ConfigManager.CompAdjustEffective;
             var nm = NetworkManager.Singleton;
             bool useSynced = _hasSyncedTweaks && (nm != null && !nm.IsServer);
             // Distinguish "I am the host, local config is truth" (legitimate) from

@@ -26,6 +26,12 @@ namespace DashFallMod
         public static CompetitiveAdjustments.CompAdjustConfig CompAdjust =>
             CompetitiveAdjustments.ConfigManager.Config.CompAdjust;
 
+        // Use this anywhere a feature should be silenced when the top-level
+        // EnableCompAdjust master flag is off.  UI display code that wants to
+        // show the user's saved intent should keep reading CompAdjust above.
+        public static CompetitiveAdjustments.CompAdjustConfig CompAdjustEffective =>
+            CompetitiveAdjustments.ConfigManager.CompAdjustEffective;
+
         public static void EnsureConfig() =>
             CompetitiveAdjustments.ConfigManager.EnsureConfig();
 
@@ -94,7 +100,7 @@ namespace CompetitiveCompanion
             var mf = ___playerMesh.PlayerTorso.GetComponentInChildren<MeshFilter>();
             if (mf == null) return;
 
-            var df = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust;
+            var df = CompetitiveAdjustments.ConfigManager.CompAdjustEffective;
             bool showCustomVisual = PluginCore.torsoMesh != null
                 && !(df?.DisableCustomTorsoVisual == true)
                 && (DashFallMod.Client.DashFallConfigLoader.ClientConfig?.ShowCustomTorsoMesh ?? true);
@@ -133,7 +139,7 @@ namespace CompetitiveCompanion
             var body = __instance.GetComponentInParent<PlayerBodyV2>();
             if (body == null || body.name.Contains("Goalie")) return;
 
-            var dfCfg = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust;
+            var dfCfg = CompetitiveAdjustments.ConfigManager.CompAdjustEffective;
             bool customActive = PluginCore.torsoMesh != null
                                 && !(dfCfg?.DisableCustomTorsoVisual == true)
                                 && (DashFallMod.Client.DashFallConfigLoader.ClientConfig?.ShowCustomTorsoMesh ?? true);

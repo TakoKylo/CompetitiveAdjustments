@@ -32,7 +32,7 @@ namespace CompetitivePuckTweaks.src
 
             // Own-body ignore: runs regardless of DisableShaftCollision.
             // Layer 6-8 is enabled globally when StickBodyCollision is on; this prevents self-hit.
-            if (CompetitiveAdjustments.ConfigManager.Config?.CompAdjust?.StickBodyCollision == true)
+            if (CompetitiveAdjustments.ConfigManager.CompAdjustEffective?.StickBodyCollision == true)
             {
                 Player owner = null;
                 foreach (var p in UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None))

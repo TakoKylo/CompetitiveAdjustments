@@ -10,7 +10,7 @@ namespace CompetitiveAdjustments
         private static readonly HashSet<int> _modifiedPucks = new HashSet<int>();
 
         public static bool IsBallModeEnabled =>
-            ConfigManager.Config?.CompAdjust?.BallMode == true;
+            ConfigManager.CompAdjustEffective?.BallMode == true;
 
         public static void TransformPuckToBall(Puck puck)
         {

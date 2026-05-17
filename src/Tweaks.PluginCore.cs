@@ -72,7 +72,7 @@ namespace CompetitivePuckTweaks.src
                 EnsurePlayerMeshesLoadedForCurrentConfig();
 
                 if (config.DisableStickCollision) Physics.IgnoreLayerCollision(6, 6, true);
-                Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.Config?.CompAdjust?.StickBodyCollision == true));
+                Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.CompAdjustEffective?.StickBodyCollision == true));
 
                 Time.fixedDeltaTime = config.FixedDeltaTime;
                 Physics.defaultSolverIterations = config.SolverIterations;
@@ -244,7 +244,7 @@ namespace CompetitivePuckTweaks.src
 
         private static void EnsurePlayerMeshesLoadedForCurrentConfig()
         {
-            bool useCustomSkaterTorsoModel = DashFallMod.ConfigManager.CompAdjust.EnableCustomSkaterTorsoModel;
+            bool useCustomSkaterTorsoModel = DashFallMod.ConfigManager.CompAdjustEffective.EnableCustomSkaterTorsoModel;
             if (!config.EnableSmallerModels && !useCustomSkaterTorsoModel)
                 return;
 
@@ -413,7 +413,7 @@ namespace CompetitivePuckTweaks.src
         {
             Dbg($"Sending config sync message to client {targetId}...");
             
-            ConfigSyncPackage messageContent = new ConfigSyncPackage(config, CompetitiveAdjustments.ConfigManager.Config?.CompAdjust);
+            ConfigSyncPackage messageContent = new ConfigSyncPackage(config, CompetitiveAdjustments.ConfigManager.CompAdjustEffective);
             var writer = new FastBufferWriter(1024, Unity.Collections.Allocator.Temp);
             var customMessagingManager = NetworkManager.Singleton?.CustomMessagingManager;
             if (customMessagingManager == null)
@@ -523,7 +523,7 @@ namespace CompetitivePuckTweaks.src
 
             EnsurePlayerMeshesLoadedForCurrentConfig();
             Physics.IgnoreLayerCollision(6, 6, config.DisableStickCollision);
-            Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.Config?.CompAdjust?.StickBodyCollision == true));
+            Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.CompAdjustEffective?.StickBodyCollision == true));
             Time.fixedDeltaTime = config.FixedDeltaTime;
             Physics.defaultSolverIterations = config.SolverIterations;
 
@@ -561,13 +561,13 @@ namespace CompetitivePuckTweaks.src
 
         // Uniform scale (used for legacy single-axis paths and cache comparison fallback)
         internal static float EffectiveTorsoMeshScale =>
-            torsoMeshScale * (DashFallMod.ConfigManager.CompAdjust?.CustomTorsoScaleX ?? 1f);
+            torsoMeshScale * (DashFallMod.ConfigManager.CompAdjustEffective?.CustomTorsoScaleX ?? 1f);
 
         internal static Vector3 EffectiveTorsoMeshScaleV3
         {
             get
             {
-                var cfg = DashFallMod.ConfigManager.CompAdjust;
+                var cfg = DashFallMod.ConfigManager.CompAdjustEffective;
                 return new Vector3(
                     torsoMeshScale * (cfg?.CustomTorsoScaleX ?? 1f),
                     torsoMeshScale * (cfg?.CustomTorsoScaleY ?? 1f),
@@ -589,7 +589,7 @@ namespace CompetitivePuckTweaks.src
         {
             get
             {
-                var df = DashFallMod.ConfigManager.CompAdjust;
+                var df = DashFallMod.ConfigManager.CompAdjustEffective;
                 float s = VisualTorsoMeshScale;
                 return new Vector3(
                     s * (df?.CustomTorsoScaleX ?? 1f),
@@ -600,7 +600,7 @@ namespace CompetitivePuckTweaks.src
 
         // True when the server or client wants the custom torso VISUAL suppressed.
         internal static bool TorsoVisualDisabled =>
-            (DashFallMod.ConfigManager.CompAdjust?.DisableCustomTorsoVisual == true) ||
+            (DashFallMod.ConfigManager.CompAdjustEffective?.DisableCustomTorsoVisual == true) ||
             !(DashFallMod.Client.DashFallConfigLoader.ClientConfig?.ShowCustomTorsoMesh ?? true);
 
 
@@ -661,7 +661,7 @@ namespace CompetitivePuckTweaks.src
         {
             try
             {
-                bool useCustom = DashFallMod.ConfigManager.CompAdjust?.EnableCustomSkaterTorsoModel == true;
+                bool useCustom = DashFallMod.ConfigManager.CompAdjustEffective?.EnableCustomSkaterTorsoModel == true;
                 var playerMeshField = typeof(PlayerBodyV2).GetField("playerMesh",
                     BindingFlags.NonPublic | BindingFlags.Instance);
 

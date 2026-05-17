@@ -196,7 +196,7 @@ namespace CompetitiveCompanion
             // Save vanilla limits before modification so config sync can restore them
             StickAngleRefs.SaveOriginals(__instance.Player);
 
-            var cfg = DashFallMod.ConfigManager.CompAdjust;
+            var cfg = DashFallMod.ConfigManager.CompAdjustEffective;
             if (!cfg.FreeBladeEnabled) return;
 
             StickAngleRefs.minBladeRef(__instance.Player.PlayerInput) = -127;
@@ -212,7 +212,7 @@ namespace CompetitiveCompanion
         [HarmonyPrefix]
         public static bool Prefix(PlayerInput __instance, InputAction.CallbackContext context)
         {
-            var cfg = DashFallMod.ConfigManager.CompAdjust;
+            var cfg = DashFallMod.ConfigManager.CompAdjustEffective;
             if (!cfg.FreeBladeEnabled) return true;
 
             if (GlobalStateManager.UIState.IsMouseRequired) return false;
@@ -239,7 +239,7 @@ namespace CompetitiveCompanion
         [HarmonyPrefix]
         public static bool Prefix(PlayerInput __instance, InputAction.CallbackContext context)
         {
-            var cfg = DashFallMod.ConfigManager.CompAdjust;
+            var cfg = DashFallMod.ConfigManager.CompAdjustEffective;
             if (!cfg.FreeBladeEnabled) return true;
 
             if (GlobalStateManager.UIState.IsMouseRequired) return false;
