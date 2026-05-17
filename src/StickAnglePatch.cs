@@ -218,13 +218,12 @@ namespace CompetitiveCompanion
             if (GlobalStateManager.UIState.IsMouseRequired) return false;
             if (__instance.Player?.Stick == null) return false;
 
+            var clientCfg = DashFallMod.Client.DashFallConfigLoader.ClientConfig;
+            if (!clientCfg.FreeBladeSpinLockEnabled) return true;
+
             float buf = StickAngleRefs.bladeAngleBufferRef(__instance);
             buf += context.ReadValue<float>();
-
-            const float MIN = -127f, MAX = 127f;
-            float range = MAX - MIN + 1;
-            if (buf > MAX) buf -= range;
-            if (buf < MIN) buf += range;
+            buf = Mathf.Clamp(buf, clientCfg.FreeBladeSpinMin, clientCfg.FreeBladeSpinMax);
 
             StickAngleRefs.bladeAngleBufferRef(__instance) = buf;
             __instance.BladeAngleInput.ClientValue = (sbyte)buf;
@@ -246,13 +245,12 @@ namespace CompetitiveCompanion
             if (GlobalStateManager.UIState.IsMouseRequired) return false;
             if (__instance.Player?.Stick == null) return false;
 
+            var clientCfg = DashFallMod.Client.DashFallConfigLoader.ClientConfig;
+            if (!clientCfg.FreeBladeSpinLockEnabled) return true;
+
             float buf = StickAngleRefs.bladeAngleBufferRef(__instance);
             buf -= context.ReadValue<float>();
-
-            const float MIN = -127f, MAX = 127f;
-            float range = MAX - MIN + 1;
-            if (buf > MAX) buf -= range;
-            if (buf < MIN) buf += range;
+            buf = Mathf.Clamp(buf, clientCfg.FreeBladeSpinMin, clientCfg.FreeBladeSpinMax);
 
             StickAngleRefs.bladeAngleBufferRef(__instance) = buf;
             __instance.BladeAngleInput.ClientValue = (sbyte)buf;

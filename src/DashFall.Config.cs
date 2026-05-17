@@ -17,6 +17,9 @@ namespace DashFallMod.Client
         public bool EnableMinimapTweaks = false;    // apply arena-scale minimap rescaling
         public float PuckScale = 1f;
         public float ButterflyPadOffset = 0f;
+        public bool FreeBladeSpinLockEnabled = true;
+        public float FreeBladeSpinMin = -4f;
+        public float FreeBladeSpinMax = 4f;
         public bool EnableSprintShoulderTrail = true;
         public float SprintShoulderTrailTime = 0.45f;
         public float SprintShoulderTrailWidth = 0.08f;
