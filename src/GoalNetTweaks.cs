@@ -50,6 +50,15 @@ namespace DashFallMod
         private static int _hiddenArenaRootId;
 
         private static bool _hasSyncedTweaks;
+
+        /// <summary>
+        /// True after the client has received PPKB/GoalTweaks from a server
+        /// that runs this mod.  Exposed for CompAdjustEffective in
+        /// ConfigManager so it can fall back to "all disabled" on vanilla
+        /// servers regardless of stale local synced values.
+        /// Always false on the server itself; servers should not gate on this.
+        /// </summary>
+        public static bool HasSyncedTweaks => _hasSyncedTweaks;
         private static bool _syncedEnableGoalNetTweaks;
         private static float _syncedGoalThicknessScale = 1f;
         private static float _syncedGoalSizeScaleX = 1f;

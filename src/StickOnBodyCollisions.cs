@@ -6,7 +6,13 @@ namespace CompetitivePuckTweaks.src {
         private const float STICK_FORCE_SOUND_THRESHOLD = 17.5f;
         private const int STICK_LAYER = 6;
 
-        private static readonly bool _disablePatch = CompetitiveAdjustments.ConfigManager.CompAdjustEffective?.StickBodyCollision != true;
+        // Property rather than `static readonly` so flipping the master flag
+        // (EnableCompAdjust) or the per-feature flag (StickBodyCollision) at
+        // runtime takes effect on the next patched call.  A field initializer
+        // would freeze the value at class-init time, before the user has had
+        // a chance to load their config edits.
+        private static bool _disablePatch =>
+            CompetitiveAdjustments.ConfigManager.CompAdjustEffective?.StickBodyCollision != true;
 
         [HarmonyPatch(typeof(PlayerBodyV2), "OnNetworkPostSpawn")]
         public class PlayerBodyV2_OnNetworkPostSpawn_Patch {

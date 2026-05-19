@@ -65,82 +65,52 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckPlugin
     }
 
     /// <summary>
-    /// Reconcile sub-mod state with the current config flags.  Called after
-    /// any config reload so flipping a top-level enable takes effect without
-    /// a full mod reload.  Idempotent: bringing a sub-mod back online is
-    /// just OnEnable, taking one offline is OnDisable, no-op if state
-    /// already matches.
+    /// Ensure each sub-mod is instantiated for the current role.  Section
+    /// enable flags are NOT consulted here -- they are runtime feature gates
+    /// applied via the Effective config accessors (DashfallEffective,
+    /// CompAdjustEffective, CompTweaksEffective).  Loading the sub-mods
+    /// unconditionally is necessary because DashFall.ServerBridge owns the
+    /// PPKB/GoalTweaks sync that CompAdjust depends on, and the DashFallMod
+    /// namespace hosts patches for both Dashfall and CompAdjust features.
+    /// Gating sub-mod load on a section flag was cascading into other
+    /// sections in unexpected ways.
     ///
-    /// Role detection combines IsHeadless (dedicated server) with
-    /// NetworkManager.IsServer (covers a hosting client after StartHost):
-    /// - dedicated server: _tweaks only
-    /// - pre-host client:  _companion only
+    /// Role detection:
+    /// - dedicated server: _tweaks only.
+    /// - pre-host client:  _companion only.
     /// - hosting client:   _companion (from OnEnable) plus _tweaks (after
-    ///                     StartHost fires EnsureServerRuntimeComponents)
+    ///                     StartHost fires EnsureServerRuntimeComponents).
     /// </summary>
     public void ApplySubModEnables()
     {
         try
         {
-            var cfg = CompetitiveAdjustments.ConfigManager.Config;
-            if (cfg == null) return;
-
             bool isHeadless = IsHeadless;
             var nm = Unity.Netcode.NetworkManager.Singleton;
             bool isServerSide = isHeadless || (nm != null && nm.IsServer);
 
-            // DashFall (always wanted regardless of role)
-            if (cfg.EnableDashfall && _dashFall == null)
+            if (_dashFall == null)
             {
                 _dashFall = new DashFallGameMod();
                 if (!_dashFall.OnEnable())
                     CompetitiveAdjustments.ConfigManager.LogWarning("DashFall sub-mod failed to enable on apply.");
-                else
-                    CompetitiveAdjustments.ConfigManager.Log("DashFall sub-mod brought online.");
-            }
-            else if (!cfg.EnableDashfall && _dashFall != null)
-            {
-                _dashFall.OnDisable();
-                _dashFall = null;
-                CompetitiveAdjustments.ConfigManager.Log("DashFall sub-mod taken offline.");
             }
 
-            // Tweaks: server-side (dedicated server or host post-StartHost).
-            // Companion: any process with graphics (windowed client, including
-            // hosts).  A hosting client wants both.
-            if (cfg.EnableCompTweaks)
+            if (isServerSide)
             {
-                if (isServerSide && _tweaks == null)
-                {
-                    _tweaks = new CompetitivePuckTweaks.src.PluginCore();
-                    if (!_tweaks.OnEnable())
-                        CompetitiveAdjustments.ConfigManager.LogWarning("Tweaks sub-mod failed to enable on apply.");
-                    else
-                        CompetitiveAdjustments.ConfigManager.Log("Tweaks sub-mod brought online.");
-                }
-                if (!isHeadless && _companion == null)
-                {
-                    _companion = new CompetitiveCompanion.PluginCore();
-                    if (!_companion.OnEnable())
-                        CompetitiveAdjustments.ConfigManager.LogWarning("Companion sub-mod failed to enable on apply.");
-                    else
-                        CompetitiveAdjustments.ConfigManager.Log("Companion sub-mod brought online.");
-                }
+                // Tweaks.OnEnable bails when NetworkManager.IsServer is false,
+                // which is the case at plugin load for a hosting client.
+                // Always call OnEnable here so a later StartHost retry
+                // actually brings Tweaks online.  OnEnable is idempotent --
+                // it early-returns when already enabled.
+                if (_tweaks == null) _tweaks = new CompetitivePuckTweaks.src.PluginCore();
+                _tweaks.OnEnable();
             }
-            else
+            if (!isHeadless && _companion == null)
             {
-                if (_tweaks != null)
-                {
-                    _tweaks.OnDisable();
-                    _tweaks = null;
-                    CompetitiveAdjustments.ConfigManager.Log("Tweaks sub-mod taken offline.");
-                }
-                if (_companion != null)
-                {
-                    _companion.OnDisable();
-                    _companion = null;
-                    CompetitiveAdjustments.ConfigManager.Log("Companion sub-mod taken offline.");
-                }
+                _companion = new CompetitiveCompanion.PluginCore();
+                if (!_companion.OnEnable())
+                    CompetitiveAdjustments.ConfigManager.LogWarning("Companion sub-mod failed to enable on apply.");
             }
         }
         catch (Exception ex)

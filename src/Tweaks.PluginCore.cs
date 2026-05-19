@@ -20,7 +20,14 @@ namespace CompetitivePuckTweaks.src
         public Harmony _harmony = new Harmony("_harmony");
         public static Mesh torsoMesh;
         public static Mesh groinMesh;
-        public static CompetitiveAdjustments.CompTweaksConfig config => CompetitiveAdjustments.ConfigManager.Config.CompTweaks;
+        // Returns the effective CompTweaks config: live values when
+        // EnableCompTweaks is on, vanilla defaults when it is off.  Every
+        // patch that reads PluginCore.config.X automatically respects the
+        // master flag through this single accessor.
+        public static CompetitiveAdjustments.CompTweaksConfig config => CompetitiveAdjustments.ConfigManager.CompTweaksEffective;
+        // Raw config for the few UI / sync paths that need the user's saved
+        // intent regardless of the master flag.
+        public static CompetitiveAdjustments.CompTweaksConfig configRaw => CompetitiveAdjustments.ConfigManager.Config.CompTweaks;
         public static Dictionary<int, Stick> StickMeshes = new Dictionary<int, Stick>();
         public static List<int> PuckIDs = new List<int>();
         public static UtilObj utilObj = new UtilObj();

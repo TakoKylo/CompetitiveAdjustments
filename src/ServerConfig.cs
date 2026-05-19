@@ -277,10 +277,15 @@ namespace CompetitiveAdjustments
         private static string ConfigFile => Path.Combine(ConfigDir, "CompetitiveAdjustments.json");
         private const int CONFIG_VERSION = 11;
 
-        // "All disabled" CompAdjust used when EnableCompAdjust is false.
-        // Returned by CompAdjustEffective so feature consumers see a coherent
-        // "off" state without rewriting individual flag checks.  Numeric fields
-        // stay at the type defaults from CompAdjustConfig, which match vanilla.
+        // "All disabled" sentinel configs returned by the Effective accessors
+        // when their master section flag is off.  Feature consumers read these
+        // (via the Effective accessors and the shortcut properties in
+        // DashFallMod.ConfigManager / Tweaks.PluginCore) so silencing a
+        // section is a single boolean flip rather than rewriting every flag
+        // check.  Numeric fields stay at the CompAdjustConfig /
+        // CompTweaksConfig / DashfallConfig type defaults; the CompTweaks
+        // defaults match the vanilla Puck values so an off CompTweaks gives
+        // vanilla physics.
         private static readonly CompAdjustConfig _disabledCompAdjust = new CompAdjustConfig
         {
             SprintShoulderTrailEnabled    = false,
@@ -294,16 +299,75 @@ namespace CompetitiveAdjustments
             BallMode                      = false,
         };
 
+        private static readonly DashfallConfig _disabledDashfall = new DashfallConfig
+        {
+            // Force every feature toggle to false so master-off silences
+            // dives, dashes, twists, slide influence, goalie features etc.
+            SkaterDashEnabled                  = false,
+            SkaterDiveEnabled                  = false,
+            EnableTwistWhileSliding            = false,
+            EnableSlideInfluence               = false,
+            GoalieDiveEnabled                  = false,
+            GoalieTwistWhileSlidingEnabled     = false,
+            GoalieSlideInfluenceEnabled        = false,
+            GoalieStandingDashEnabled          = false,
+            GoalieDashExtendEnabled            = false,
+            GoalieStancesEnabled               = false,
+            GoalieSlidingReachReduction        = false,
+            EnableGoalieScaling                = false,
+            EnableDiveFallenDrag               = false,
+            EnableDebugLogs                    = false,
+        };
+
+        // CompTweaks vanilla defaults already live on the type (per the
+        // VanillaCPTValues.json reset), so a fresh CompTweaksConfig is the
+        // "off" state.
+        private static readonly CompTweaksConfig _disabledCompTweaks = new CompTweaksConfig();
+
         /// <summary>
-        /// Returns the live CompAdjust config when the top-level
-        /// <see cref="ServerConfig.EnableCompAdjust"/> flag is on, or a
-        /// stripped "all features off" copy when it is off.  Feature
-        /// consumers should read this instead of <c>Config.CompAdjust</c>.
+        /// Returns the live CompAdjust config when the master flag is on AND
+        /// the local process is authoritative on it (the server itself, or a
+        /// client that has received the PPKB/GoalTweaks sync from the server).
+        /// Otherwise returns a stripped "all features off" copy.  This catches
+        /// the case where a client disconnects from a modded server (leaving
+        /// stale synced values in local Config.CompAdjust) and connects to a
+        /// vanilla server: the synced flag is cleared so the local stale
+        /// state is no longer applied.
         /// UI display code that wants to show the user's intent should keep
         /// reading <c>Config.CompAdjust</c> directly.
         /// </summary>
-        public static CompAdjustConfig CompAdjustEffective =>
-            Config != null && Config.EnableCompAdjust ? Config.CompAdjust : _disabledCompAdjust;
+        public static CompAdjustConfig CompAdjustEffective
+        {
+            get
+            {
+                if (Config == null || !Config.EnableCompAdjust) return _disabledCompAdjust;
+                var nm = Unity.Netcode.NetworkManager.Singleton;
+                if (nm != null && !nm.IsServer && !DashFallMod.GoalNetTweaks.HasSyncedTweaks)
+                    return _disabledCompAdjust;
+                return Config.CompAdjust;
+            }
+        }
+
+        /// <summary>
+        /// Returns the live Dashfall config when the master flag is on, or a
+        /// stripped "all features off" copy when it is off.  Read this
+        /// instead of <c>Config.Dashfall</c> when deciding whether to enable
+        /// a Dashfall feature.  Direct numeric-only reads (e.g. dive force
+        /// tuning) can use either path since the disabled-Dashfall instance
+        /// keeps the same tuning defaults.
+        /// </summary>
+        public static DashfallConfig DashfallEffective =>
+            Config != null && Config.EnableDashfall ? Config.Dashfall : _disabledDashfall;
+
+        /// <summary>
+        /// Returns the live CompTweaks config when the master flag is on, or
+        /// a fresh CompTweaksConfig (vanilla defaults) when it is off.  Tweaks
+        /// patches read this via <c>PluginCore.config</c>, so silencing the
+        /// section sets every Unity physics value back to vanilla on the next
+        /// ApplyLiveConfig.
+        /// </summary>
+        public static CompTweaksConfig CompTweaksEffective =>
+            Config != null && Config.EnableCompTweaks ? Config.CompTweaks : _disabledCompTweaks;
 
         public static void EnsureConfig()
         {
@@ -507,8 +571,14 @@ namespace CompetitiveAdjustments
         {
             try
             {
-                DashFallMod.GoalieDashExtend.Enabled = cfg.Dashfall.GoalieDashExtendEnabled;
-                DashFallMod.Stances.Enabled = cfg.Dashfall.GoalieStancesEnabled;
+                // Read through DashfallEffective so EnableDashfall=false also
+                // drops the static feature flags to false.  Without this the
+                // GoalieDashExtend / Stances Harmony patches would keep
+                // running based on cfg.Dashfall even when the master flag
+                // says the section is off.
+                var df = DashfallEffective;
+                DashFallMod.GoalieDashExtend.Enabled = df.GoalieDashExtendEnabled;
+                DashFallMod.Stances.Enabled = df.GoalieStancesEnabled;
             }
             catch { }
         }

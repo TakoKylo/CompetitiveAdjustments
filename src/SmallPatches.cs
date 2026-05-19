@@ -20,7 +20,16 @@ namespace DashFallMod
 {
     public static class ConfigManager
     {
+        // Default shortcut now returns the effective Dashfall config.  When
+        // EnableDashfall is off this is the all-features-disabled sentinel,
+        // so every consumer that does `cfg.SkaterDiveEnabled` etc. naturally
+        // sees false without needing its own master check.  UI display code
+        // that wants to show the user's saved intent should read
+        // ConfigRaw below.
         public static CompetitiveAdjustments.DashfallConfig Config =>
+            CompetitiveAdjustments.ConfigManager.DashfallEffective;
+
+        public static CompetitiveAdjustments.DashfallConfig ConfigRaw =>
             CompetitiveAdjustments.ConfigManager.Config.Dashfall;
 
         public static CompetitiveAdjustments.CompAdjustConfig CompAdjust =>

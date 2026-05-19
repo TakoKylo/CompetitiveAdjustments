@@ -30,8 +30,11 @@ namespace CompetitivePuckTweaks.src
         internal static readonly AccessTools.FieldRef<PlayerInput, float> bladeAngleBufferRef =
             AccessTools.FieldRefAccess<PlayerInput, float>("bladeAngleBuffer");
 
+        // Routed through CompAdjustEffective so EnableCompAdjust=false silences
+        // FreeBlade AND HighSticking at the same time, without each consumer
+        // needing its own master check.
         internal static CompetitiveAdjustments.CompAdjustConfig Cfg =>
-            CompetitiveAdjustments.ConfigManager.Config.CompAdjust;
+            CompetitiveAdjustments.ConfigManager.CompAdjustEffective;
 
         // Saved vanilla blade angle limits per player (captured before first modification)
         private static readonly Dictionary<int, (int min, int max)> _savedBladeAngles =
