@@ -110,13 +110,20 @@ namespace CompetitiveAdjustments
             int id = puck.GetInstanceID();
             if (!_modifiedPucks.Contains(id)) return;
 
-            // Remove ball mesh
+            // Remove ball mesh. Destroy (not DestroyImmediate) so we don't yank
+            // a GameObject out from under any logic that might still hold a
+            // reference this frame.
             var ballMesh = puck.transform.Find("BallMesh");
             if (ballMesh != null)
             {
                 var br = ballMesh.GetComponent<MeshRenderer>();
-                if (br != null) br.enabled = false;
-                UnityEngine.Object.DestroyImmediate(ballMesh.gameObject);
+                if (br != null)
+                {
+                    // Free the per-puck Material clone created by TransformPuckToBall.
+                    if (br.material != null) UnityEngine.Object.Destroy(br.material);
+                    br.enabled = false;
+                }
+                UnityEngine.Object.Destroy(ballMesh.gameObject);
             }
 
             // Restore original renderers
@@ -130,7 +137,7 @@ namespace CompetitiveAdjustments
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
             {
                 var sc = puck.GetComponent<SphereCollider>();
-                if (sc != null) UnityEngine.Object.DestroyImmediate(sc);
+                if (sc != null) UnityEngine.Object.Destroy(sc);
             }
 
             _modifiedPucks.Remove(id);

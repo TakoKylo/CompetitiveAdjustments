@@ -62,29 +62,42 @@ namespace DashFallMod
     }
     
     
-    // ===== Dash Prefix - Main dash logic =====
+    // ===== Dash Prefix + Postfix - Main dash logic =====
+    // Merged into one class so __state can pass "vanilla actually ran" from
+    // prefix to postfix; the postfix only stamps LastDashAt when the dash was
+    // not short-circuited here.
     [HarmonyPatch]
     public static class Dash_Prefix_Patch
     {
         private static DashfallCfg Config => ConfigManager.Config;
         private static bool IsFaceOff() => GameManager.Instance != null && GameManager.Instance.Phase == GamePhase.FaceOff;
-        
+
         [HarmonyTargetMethods]
         public static IEnumerable<MethodBase> TargetMethods()
         {
             yield return AccessTools.Method(typeof(PlayerBodyV2), nameof(PlayerBodyV2.DashLeft));
             yield return AccessTools.Method(typeof(PlayerBodyV2), nameof(PlayerBodyV2.DashRight));
         }
-        
-        [HarmonyPrefix]
-        public static bool Prefix(PlayerBodyV2 __instance, MethodBase __originalMethod)
+
+        [HarmonyPostfix]
+        public static void Postfix(PlayerBodyV2 __instance, bool __state)
         {
-            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return true;
+            if (!__state) return;
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
+            var p = __instance.Player; if (p == null) return;
+            DashMod.LastDashAt[p.NetworkObjectId] = Time.time;
+        }
+
+        [HarmonyPrefix]
+        public static bool Prefix(PlayerBodyV2 __instance, MethodBase __originalMethod, out bool __state)
+        {
+            // __state = true => vanilla ran => postfix should stamp LastDashAt.
+            __state = false;
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) { __state = true; return true; }
             var player = __instance.Player; if (player == null) return false;
-            
+
             bool left = __originalMethod.Name.Contains("Left");
-            ulong cid = player.OwnerClientId;
-            
+
             // --- role/state ---
             var role = player.Role;
             bool isAttacker = role == PlayerRole.Attacker;
@@ -116,6 +129,7 @@ namespace DashFallMod
                 {
                     return false; // Vanilla dash only works while sliding for goalies
                 }
+                __state = true;
                 return true; // Let vanilla handle the sliding dash
             }
             
@@ -165,27 +179,8 @@ namespace DashFallMod
             }
             
             // Otherwise (air dashes, goalie while sliding, etc.), let vanilla run
+            __state = true;
             return true;
-        }
-    }
-    
-    // ===== Dash Postfix =====
-    [HarmonyPatch]
-    public static class Dash_Postfix_Patch
-    {
-        [HarmonyTargetMethods]
-        public static IEnumerable<MethodBase> TargetMethods()
-        {
-            yield return AccessTools.Method(typeof(PlayerBodyV2), nameof(PlayerBodyV2.DashLeft));
-            yield return AccessTools.Method(typeof(PlayerBodyV2), nameof(PlayerBodyV2.DashRight));
-        }
-        
-        [HarmonyPostfix]
-        public static void Postfix(PlayerBodyV2 __instance)
-        {
-            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
-            var p = __instance.Player; if (p == null) return;
-            DashMod.LastDashAt[p.NetworkObjectId] = Time.time;
         }
     }
 }

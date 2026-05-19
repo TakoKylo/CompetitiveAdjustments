@@ -222,7 +222,7 @@ namespace CompetitiveCompanion
             if (__instance.Player?.Stick == null) return false;
 
             var clientCfg = DashFallMod.Client.DashFallConfigLoader.ClientConfig;
-            if (!clientCfg.FreeBladeSpinLockEnabled) return true;
+            if (clientCfg == null || !clientCfg.FreeBladeSpinLockEnabled) return true;
 
             float buf = StickAngleRefs.bladeAngleBufferRef(__instance);
             buf += context.ReadValue<float>();
@@ -249,7 +249,7 @@ namespace CompetitiveCompanion
             if (__instance.Player?.Stick == null) return false;
 
             var clientCfg = DashFallMod.Client.DashFallConfigLoader.ClientConfig;
-            if (!clientCfg.FreeBladeSpinLockEnabled) return true;
+            if (clientCfg == null || !clientCfg.FreeBladeSpinLockEnabled) return true;
 
             float buf = StickAngleRefs.bladeAngleBufferRef(__instance);
             buf -= context.ReadValue<float>();

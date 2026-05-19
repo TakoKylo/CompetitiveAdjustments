@@ -36,6 +36,16 @@ namespace CompetitivePuckTweaks.src
         private bool _physicsListenersLoaded;
         private bool _syncRequestHandlerRegistered;
 
+        // Captured vanilla values for the globally-applied physics knobs so
+        // OnDisable can restore them when the mod is toggled off at runtime.
+        // Without this, fixedDeltaTime / solverIterations / layer-collision
+        // masks stay on the modded values for the rest of the session.
+        private bool _vanillaPhysicsCaptured;
+        private float _vanillaFixedDeltaTime;
+        private int _vanillaSolverIterations;
+        private bool _vanillaIgnore_6_6;
+        private bool _vanillaIgnore_6_8;
+
         /// <summary>
         /// Core plugin enable function
         /// </summary>
@@ -77,6 +87,15 @@ namespace CompetitivePuckTweaks.src
                 PluginCore.Log($"{System.Linq.Enumerable.Count(_harmony.GetPatchedMethods())} harmony methods patched.");
 
                 EnsurePlayerMeshesLoadedForCurrentConfig();
+
+                if (!_vanillaPhysicsCaptured)
+                {
+                    _vanillaFixedDeltaTime = Time.fixedDeltaTime;
+                    _vanillaSolverIterations = Physics.defaultSolverIterations;
+                    _vanillaIgnore_6_6 = Physics.GetIgnoreLayerCollision(6, 6);
+                    _vanillaIgnore_6_8 = Physics.GetIgnoreLayerCollision(6, 8);
+                    _vanillaPhysicsCaptured = true;
+                }
 
                 if (config.DisableStickCollision) Physics.IgnoreLayerCollision(6, 6, true);
                 Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.CompAdjustEffective?.StickBodyCollision == true));
@@ -132,6 +151,18 @@ namespace CompetitivePuckTweaks.src
                 EventListenersPresent = false;
                 _enabled = false;
                 if (_active == this) _active = null;
+
+                // Restore the global physics knobs we trampled in OnEnable so a
+                // mid-session toggle doesn't leave the game on the modded
+                // simulation step / layer mask.
+                if (_vanillaPhysicsCaptured)
+                {
+                    Time.fixedDeltaTime = _vanillaFixedDeltaTime;
+                    Physics.defaultSolverIterations = _vanillaSolverIterations;
+                    Physics.IgnoreLayerCollision(6, 6, _vanillaIgnore_6_6);
+                    Physics.IgnoreLayerCollision(6, 8, _vanillaIgnore_6_8);
+                    _vanillaPhysicsCaptured = false;
+                }
                 return true;
             }
             catch (Exception e)
@@ -419,18 +450,16 @@ namespace CompetitivePuckTweaks.src
         public static void ManualSync(ulong targetId)
         {
             Dbg($"Sending config sync message to client {targetId}...");
-            
-            ConfigSyncPackage messageContent = new ConfigSyncPackage(config, CompetitiveAdjustments.ConfigManager.CompAdjustEffective);
-            var writer = new FastBufferWriter(1024, Unity.Collections.Allocator.Temp);
+
             var customMessagingManager = NetworkManager.Singleton?.CustomMessagingManager;
             if (customMessagingManager == null)
             {
                 Log("Config sync skipped: CustomMessagingManager is null.");
-                writer.Dispose();
                 return;
             }
 
-            using (writer)
+            ConfigSyncPackage messageContent = new ConfigSyncPackage(config, CompetitiveAdjustments.ConfigManager.CompAdjustEffective);
+            using (var writer = new FastBufferWriter(1024, Unity.Collections.Allocator.Temp))
             {
                 writer.WriteValueSafe(messageContent);
                 customMessagingManager.SendNamedMessage(CMM_SYNC_CONFIG, targetId, writer);

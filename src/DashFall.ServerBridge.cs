@@ -321,9 +321,11 @@ namespace PoncePuck.Keybinds
             
             try
             {
-                var writer = new FastBufferWriter(2, Unity.Collections.Allocator.Temp);
-                writer.WriteValueSafe(features.ToUShort());
-                _cmm.SendNamedMessage("PPKB/Features", clientId, writer);
+                using (var writer = new FastBufferWriter(2, Unity.Collections.Allocator.Temp))
+                {
+                    writer.WriteValueSafe(features.ToUShort());
+                    _cmm.SendNamedMessage("PPKB/Features", clientId, writer);
+                }
             }
             catch (Exception e)
             {
@@ -331,33 +333,26 @@ namespace PoncePuck.Keybinds
             }
         }
 
-        public static void BroadcastFeaturesToAllClients()
+        private static ServerFeatures BuildCurrentFeaturesOrNull()
         {
-            var nm = NetworkManager.Singleton;
-            if (nm == null || !nm.IsServer) return;
-
-            // Ensure config is loaded
-            try
-            {
-                DashFallMod.ConfigManager.EnsureConfig();
-            }
-            catch { }
+            try { DashFallMod.ConfigManager.EnsureConfig(); }
+            catch (Exception e) { CompetitiveAdjustments.ConfigManager.LogWarning("EnsureConfig threw: " + e.Message); }
 
             var cfg = DashFallMod.ConfigManager.Config;
             if (cfg == null)
             {
-                CompetitiveAdjustments.ConfigManager.LogError("BroadcastFeaturesToAllClients: Config is null!");
-                return;
+                CompetitiveAdjustments.ConfigManager.LogError("BuildCurrentFeatures: Config is null!");
+                return null;
             }
 
             var compAdjust = DashFallMod.ConfigManager.CompAdjustEffective;
             if (compAdjust == null)
             {
-                CompetitiveAdjustments.ConfigManager.LogError("BroadcastFeaturesToAllClients: CompAdjust is null!");
-                return;
+                CompetitiveAdjustments.ConfigManager.LogError("BuildCurrentFeatures: CompAdjust is null!");
+                return null;
             }
 
-            var features = new ServerFeatures
+            return new ServerFeatures
             {
                 SkaterDashEnabled = cfg.SkaterDashEnabled,
                 SkaterDiveEnabled = cfg.SkaterDiveEnabled,
@@ -371,10 +366,18 @@ namespace PoncePuck.Keybinds
                 GoalieStancesEnabled = cfg.GoalieStancesEnabled,
                 SprintShoulderTrailEnabled = compAdjust.SprintShoulderTrailEnabled
             };
+        }
 
-            Debug.Log($"[COMPADJUST] Broadcasting features: GoalieDashExtendEnabled={features.GoalieDashExtendEnabled}, GoalieStancesEnabled={features.GoalieStancesEnabled}");
+        public static void BroadcastFeaturesToAllClients()
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsServer) return;
 
-            var players = PlayerManager.Instance?.GetPlayers();
+            var features = BuildCurrentFeaturesOrNull();
+            if (features == null) return;
+
+            var pm = PlayerManager.Instance;
+            var players = pm != null ? pm.GetPlayers() : null;
             if (players == null || players.Count == 0)
             {
                 CompetitiveAdjustments.ConfigManager.LogWarning("No players to send features to");
@@ -382,23 +385,36 @@ namespace PoncePuck.Keybinds
             }
 
             foreach (var player in players)
-            {
                 SendFeaturesToClient(player.OwnerClientId, features);
-            }
         }
 
-        public static void BroadcastGoalTweaksToAllClients()
+        public static void SendInitialStateToClient(ulong clientId)
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsServer) return;
+
+            var features = BuildCurrentFeaturesOrNull();
+            if (features != null) SendFeaturesToClient(clientId, features);
+
+            SendGoalTweaksToClient(clientId);
+        }
+
+        public static void SendGoalTweaksToClient(ulong clientId)
         {
             var nm = NetworkManager.Singleton;
             if (nm == null || !nm.IsServer || _cmm == null) return;
 
             var cfg = DashFallMod.ConfigManager.CompAdjustEffective;
-
-            foreach (var player in PlayerManager.Instance.GetPlayers())
+            if (cfg == null)
             {
-                try
+                CompetitiveAdjustments.ConfigManager.LogError("SendGoalTweaksToClient: CompAdjust is null!");
+                return;
+            }
+
+            try
+            {
+                using (var writer = new FastBufferWriter(160, Unity.Collections.Allocator.Temp))
                 {
-                    var writer = new FastBufferWriter(160, Unity.Collections.Allocator.Temp);
                     writer.WriteValueSafe(cfg.EnableGoalNetTweaks);
                     writer.WriteValueSafe(cfg.GoalThicknessScale);
                     writer.WriteValueSafe(cfg.GoalSizeScaleX);
@@ -415,44 +431,79 @@ namespace PoncePuck.Keybinds
                     writer.WriteValueSafe(cfg.ArenaRotX);
                     writer.WriteValueSafe(cfg.ArenaRotY);
                     writer.WriteValueSafe(cfg.ArenaRotZ);
-                    _cmm.SendNamedMessage("PPKB/GoalTweaks", player.OwnerClientId, writer);
+                    _cmm.SendNamedMessage("PPKB/GoalTweaks", clientId, writer);
                 }
-                catch (Exception e)
-                {
-                    Debug.LogError($"[COMPADJUST] BroadcastGoalTweaksToAllClients exception: {e}");
-                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[COMPADJUST] SendGoalTweaksToClient exception: {e}");
             }
         }
 
+        public static void BroadcastGoalTweaksToAllClients()
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsServer || _cmm == null) return;
+
+            var pm = PlayerManager.Instance;
+            var players = pm != null ? pm.GetPlayers() : null;
+            if (players == null) return;
+
+            foreach (var player in players)
+                SendGoalTweaksToClient(player.OwnerClientId);
+        }
+
         // ---------- Message handlers ----------
+        // Hard upper bound on the number of action names a single Hello can
+        // declare. Real clients send well under a dozen; anything above this
+        // is malformed or hostile, and we want to bail before allocating /
+        // reading megabytes worth of strings.
+        private const int MaxHelloActionCount = 256;
+
         private static void OnHello(ulong clientId, FastBufferReader reader)
         {
             try
             {
                 int count = 0;
                 reader.ReadValueSafe(out count);
-                
+
+                if (count < 0 || count > MaxHelloActionCount)
+                {
+                    Debug.LogWarning($"[COMPADJUST] OnHello from {clientId}: rejected action count {count} (limit {MaxHelloActionCount}).");
+                    return;
+                }
+
                 var set = new HashSet<string>();
                 for (int i = 0; i < count; i++)
                 {
-                    string a; 
+                    string a;
                     reader.ReadValueSafe(out a);
                     if (!string.IsNullOrEmpty(a)) set.Add(Canon(a));
                 }
+
+                // If the client re-sends the same declaration (common on a
+                // spammy keybind hub), skip the SetEquals == true path: the
+                // re-broadcast is pure CPU/bandwidth waste, and the spammy
+                // case is exactly the one we want to deny amplification on.
+                bool sameAsPrior = _declared.TryGetValue(clientId, out var prior)
+                                   && prior != null
+                                   && prior.SetEquals(set);
+                if (sameAsPrior) return;
+
                 _declared[clientId] = set;
                 // Reset held set when new declaration arrives
                 _held[clientId] = new HashSet<string>();
-                
-                // Send server features to client
+
+                // Send server features only to the client that said hello. Earlier
+                // versions broadcast to every connected client on every Hello, which
+                // produced N^2 traffic and was trivially amplifiable by a spammy
+                // client. The hello sender is the only one that needs the state.
                 var nm = NetworkManager.Singleton;
                 if (nm != null && nm.IsServer)
-                {
-                    BroadcastFeaturesToAllClients();
-                    BroadcastGoalTweaksToAllClients();
-                }
+                    SendInitialStateToClient(clientId);
             }
-            catch (Exception e) 
-            { 
+            catch (Exception e)
+            {
                 Debug.LogError($"[COMPADJUST] OnHello exception: {e}");
             }
         }

@@ -266,6 +266,12 @@ namespace DashFallMod
                 if (Time.unscaledTime < _nextRefreshAt) return;
                 _nextRefreshAt = Time.unscaledTime + 1f;
                 RefreshAll();
+                // ChunkSyncClient.Enable() is only invoked from
+                // ApplyNetworkBoundsPatches, which early-returns once chunks
+                // are active -- so a CMM-not-ready failure on the initial
+                // Enable would otherwise never retry. Poll here at 1Hz; the
+                // call is a fast no-op once registration succeeds.
+                DashFallMod.Net.ChunkSyncClient.TickRegistrationRetry();
             }
         }
 

@@ -67,6 +67,17 @@ namespace DashFallMod
         private static CustomMessagingManager _cmm;
         private static bool _cmmRegistered = false;
 
+        // Last broadcast state per body. Stance state is two bools, edge-triggered,
+        // so we keep Reliable delivery but skip the send whenever nothing changed
+        // since the previous tick (prior code resent every server fixed step).
+        // A low-frequency heartbeat (StanceHeartbeatSeconds) re-broadcasts the
+        // current state anyway, so a client that joins mid-stance receives it
+        // within the heartbeat window instead of only on the next state change.
+        private const float StanceHeartbeatSeconds = 1f;
+        private struct LastSent { public bool left, right; public float time; }
+        private static readonly Dictionary<ulong, LastSent> _lastBroadcast
+            = new Dictionary<ulong, LastSent>();
+
         // Reflection fields
         private static FieldInfo _localPositionField;
         private static FieldInfo _localPositionTweenField;
@@ -135,11 +146,7 @@ namespace DashFallMod
 
         private static void NotifyClients(ulong bodyNetId, bool extendLeft, bool extendRight)
         {
-            if (_cmm == null)
-            {
-                Debug.Log($"[Stances] NotifyClients: _cmm is null (Enabled={_enabled})");
-                return;
-            }
+            if (_cmm == null) return;
             var nm = NetworkManager.Singleton;
             if (nm == null || !nm.IsServer) return;
             // On a listen-server (host), ConnectedClientsIds includes the host's own
@@ -148,15 +155,27 @@ namespace DashFallMod
             int remoteClients = nm.IsHost ? nm.ConnectedClientsIds.Count - 1 : nm.ConnectedClientsIds.Count;
             if (remoteClients <= 0) return;
 
+            // Dedupe + heartbeat: skip resends when nothing changed AND the
+            // heartbeat window hasn't elapsed. Without the heartbeat, a client
+            // that joins mid-stance would never see the existing state.
+            float now = Time.unscaledTime;
+            if (_lastBroadcast.TryGetValue(bodyNetId, out var prev)
+                && prev.left == extendLeft && prev.right == extendRight
+                && now - prev.time < StanceHeartbeatSeconds)
+                return;
+
             try
             {
-                var writer = new FastBufferWriter(10, Allocator.Temp);
-                writer.WriteValueSafe(bodyNetId);
-                writer.WriteValueSafe(extendLeft);
-                writer.WriteValueSafe(extendRight);
-                _cmm.SendNamedMessageToAll(CMM_STANCE, writer);
+                using (var writer = new FastBufferWriter(10, Allocator.Temp))
+                {
+                    writer.WriteValueSafe(bodyNetId);
+                    writer.WriteValueSafe(extendLeft);
+                    writer.WriteValueSafe(extendRight);
+                    _cmm.SendNamedMessageToAll(CMM_STANCE, writer, NetworkDelivery.Reliable);
+                }
+                _lastBroadcast[bodyNetId] = new LastSent { left = extendLeft, right = extendRight, time = now };
             }
-            catch { }
+            catch (Exception e) { Debug.LogWarning("[Stances] NotifyClients send failed: " + e.Message); }
         }
 
         private static void OnStanceMessage(ulong senderId, FastBufferReader reader)
@@ -171,7 +190,7 @@ namespace DashFallMod
 
                 var nm = NetworkManager.Singleton;
                 if (nm == null) return;
-                if (!nm.SpawnManager.SpawnedObjects.TryGetValue(bodyNetId, out var netObj)) return;
+                if (nm.SpawnManager == null || !nm.SpawnManager.SpawnedObjects.TryGetValue(bodyNetId, out var netObj)) return;
 
                 var body = netObj.GetComponent<PlayerBodyV2>();
                 if (body == null) return;
@@ -179,7 +198,7 @@ namespace DashFallMod
                 int bodyId = body.GetInstanceID();
                 _stanceState[bodyId] = (extendLeft, extendRight);
             }
-            catch { }
+            catch (Exception e) { Debug.LogWarning("[Stances] OnStanceMessage decode failed: " + e.Message); }
         }
 
         // =====================================================
@@ -831,6 +850,23 @@ namespace DashFallMod
             _activeThisFrame.Clear();
             _slideStartTime.Clear();
             _forceReleaseUntilClear.Clear();
+            _lastBroadcast.Clear();
+        }
+
+        /// <summary>
+        /// Tear down the CMM handler and clear all state. Called from
+        /// DashFallGameMod.OnDisable so the handler does not linger after
+        /// a plugin disable/enable cycle.
+        /// </summary>
+        public static void Disable()
+        {
+            if (_cmm != null && _cmmRegistered)
+            {
+                try { _cmm.UnregisterNamedMessageHandler(CMM_STANCE); } catch { }
+            }
+            _cmm = null;
+            _cmmRegistered = false;
+            ClearAll();
         }
 
         public static void OnLegPadDestroyed(PlayerLegPad legPad)

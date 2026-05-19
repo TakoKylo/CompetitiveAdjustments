@@ -89,6 +89,17 @@ namespace DashFallMod
         private const string CMM_VELOCITY_EXTEND = "DashFall/VelocityExtend3";
         private static CustomMessagingManager _cmm;
         private static bool _cmmRegistered = false;
+
+        // Server-side broadcast throttle. Prior code sent every fixed step
+        // (~50 Hz) which generated a lot of reliable traffic per goalie. We
+        // still send Reliable (terminal states must latch on clients) but
+        // skip frames whose values have not changed meaningfully since the
+        // last send. A forced flush fires whenever a value crosses the snap
+        // thresholds (0 / 1) so the final state is always delivered.
+        private const float SendIntervalSeconds = 1f / 20f;
+        private const float SendDeltaThreshold = 0.02f;
+        private struct SendState { public float lastLeft, lastRight, lastTime; }
+        private static readonly Dictionary<ulong, SendState> _sendState = new Dictionary<ulong, SendState>();
         
         private static bool _enabled = false;
         public static bool Enabled
@@ -144,7 +155,7 @@ namespace DashFallMod
                     _cmm.RegisterNamedMessageHandler(CMM_VELOCITY_EXTEND, OnVelocityExtendMessage);
                     _cmmRegistered = true;
                 }
-                catch { }
+                catch (Exception e) { Debug.LogWarning("[GoalieDashExtend] Register CMM handler failed: " + e.Message); }
             }
         }
         
@@ -169,8 +180,7 @@ namespace DashFallMod
                 
                 var nm = NetworkManager.Singleton;
                 if (nm == null) return;
-                
-                if (!nm.SpawnManager.SpawnedObjects.TryGetValue(bodyNetId, out var netObj)) return;
+                if (nm.SpawnManager == null || !nm.SpawnManager.SpawnedObjects.TryGetValue(bodyNetId, out var netObj)) return;
                 
                 var body = netObj.GetComponent<PlayerBodyV2>();
                 if (body == null) return;
@@ -185,15 +195,15 @@ namespace DashFallMod
         }
         
         /// <summary>
-        /// Notify clients about extension amounts
+        /// Notify clients about extension amounts. Reliable in every case so
+        /// clients can't miss a terminal state. Throttled to ~20 Hz by default
+        /// but flushed immediately whenever a value crosses the snap thresholds
+        /// (0 / 1) or moves more than SendDeltaThreshold from the last sent
+        /// value, so clients still see smooth transitions.
         /// </summary>
         private static void NotifyClientsExtension(ulong bodyNetId, float leftExtension, float rightExtension)
         {
-            if (_cmm == null)
-            {
-                ClientDbg($"[GoalieDashExtend] NotifyClientsExtension: _cmm is null (Enabled={_enabled})");
-                return;
-            }
+            if (_cmm == null) return;
             var nm = NetworkManager.Singleton;
             if (nm == null || !nm.IsServer) return;
             // On a listen-server (host), ConnectedClientsIds includes the host's own
@@ -201,16 +211,38 @@ namespace DashFallMod
             // when only the host is "connected" produces 'clientIds is empty' errors.
             int remoteClients = nm.IsHost ? nm.ConnectedClientsIds.Count - 1 : nm.ConnectedClientsIds.Count;
             if (remoteClients <= 0) return;
-            
+
+            _sendState.TryGetValue(bodyNetId, out var s);
+            float now = Time.unscaledTime;
+            bool crossedSnap =
+                Crossed(s.lastLeft, leftExtension) || Crossed(s.lastRight, rightExtension);
+            bool bigDelta =
+                Mathf.Abs(s.lastLeft - leftExtension) >= SendDeltaThreshold
+                || Mathf.Abs(s.lastRight - rightExtension) >= SendDeltaThreshold;
+            bool dueByTime = now - s.lastTime >= SendIntervalSeconds;
+
+            if (!crossedSnap && !bigDelta && !dueByTime) return;
+
             try
             {
-                var writer = new FastBufferWriter(16, Allocator.Temp);
-                writer.WriteValueSafe(bodyNetId);
-                writer.WriteValueSafe(leftExtension);
-                writer.WriteValueSafe(rightExtension);
-                _cmm.SendNamedMessageToAll(CMM_VELOCITY_EXTEND, writer);
+                using (var writer = new FastBufferWriter(16, Allocator.Temp))
+                {
+                    writer.WriteValueSafe(bodyNetId);
+                    writer.WriteValueSafe(leftExtension);
+                    writer.WriteValueSafe(rightExtension);
+                    _cmm.SendNamedMessageToAll(CMM_VELOCITY_EXTEND, writer, NetworkDelivery.Reliable);
+                }
+                _sendState[bodyNetId] = new SendState { lastLeft = leftExtension, lastRight = rightExtension, lastTime = now };
             }
-            catch { }
+            catch (Exception e) { Debug.LogWarning("[GoalieDashExtend] Velocity-extend send failed: " + e.Message); }
+        }
+
+        // Snap thresholds inside Mathf.Lerp clamps in ClientUpdateLegs / UpdateLegPositions
+        // are 0.01 and 0.99. A value transitioning across either threshold must always
+        // be delivered so clients latch the terminal state.
+        private static bool Crossed(float a, float b)
+        {
+            return (a < 0.01f) != (b < 0.01f) || (a > 0.99f) != (b > 0.99f);
         }
         
         /// <summary>
@@ -780,13 +812,6 @@ namespace DashFallMod
         }
         
         /// <summary>
-        /// Called from Tick - nothing time-based needed
-        /// </summary>
-        public static void Tick()
-        {
-        }
-        
-        /// <summary>
         /// Client-side update: uses extension values received from the server via CMM.
         /// No independent velocity calculation - server values are authoritative and already smooth.
         /// </summary>
@@ -884,6 +909,23 @@ namespace DashFallMod
             _gameNativeExtend.Clear();
             _pendingTweenKill.Clear();
             _lastSetPosition.Clear();
+            _sendState.Clear();
+        }
+
+        /// <summary>
+        /// Tear down the CMM handler and reset broadcast bookkeeping. Called from
+        /// DashFallGameMod.OnDisable so the handler does not linger after a plugin
+        /// disable/enable cycle.
+        /// </summary>
+        public static void Disable()
+        {
+            if (_cmm != null && _cmmRegistered)
+            {
+                try { _cmm.UnregisterNamedMessageHandler(CMM_VELOCITY_EXTEND); } catch { }
+            }
+            _cmm = null;
+            _cmmRegistered = false;
+            ClearAll();
         }
         
         public static void OnLegPadDestroyed(PlayerLegPad legPad)
@@ -1042,29 +1084,31 @@ namespace DashFallMod
         {
             GoalieDashExtend.IsDashExtending = true;
         }
-        
+
         [HarmonyPostfix]
         public static void Postfix(PlayerBodyV2 __instance, MethodBase __originalMethod)
         {
-            try
-            {
-                if (!GoalieDashExtend.Enabled) return;
-                if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
-                if (__instance.Player == null || __instance.Player.Role != PlayerRole.Goalie) return;
-                if (!__instance.IsSliding.Value) return;
-                
-                // Always revert dash-extend network var while sliding goalies to avoid
-                // default dash extend visual sneaking through and causing jitter.
-                bool isDashLeft = __originalMethod.Name.Contains("Left");
-                if (isDashLeft)
-                    __instance.IsExtendedRight.Value = false;
-                else
-                    __instance.IsExtendedLeft.Value = false;
-            }
-            finally
-            {
-                GoalieDashExtend.IsDashExtending = false;
-            }
+            if (!GoalieDashExtend.Enabled) return;
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
+            if (__instance.Player == null || __instance.Player.Role != PlayerRole.Goalie) return;
+            if (!__instance.IsSliding.Value) return;
+
+            // Always revert dash-extend network var while sliding goalies to avoid
+            // default dash extend visual sneaking through and causing jitter.
+            bool isDashLeft = __originalMethod.Name.Contains("Left");
+            if (isDashLeft)
+                __instance.IsExtendedRight.Value = false;
+            else
+                __instance.IsExtendedLeft.Value = false;
+        }
+
+        // Runs after Postfix AND after the original throws -- the Postfix's
+        // try/finally cannot clear IsDashExtending if vanilla DashLeft/Right
+        // throws, because Postfixes are skipped on original-throw.
+        [HarmonyFinalizer]
+        public static void Finalizer()
+        {
+            GoalieDashExtend.IsDashExtending = false;
         }
     }
 }

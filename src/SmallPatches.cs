@@ -292,8 +292,7 @@ namespace CompetitivePuckTweaks.src
                     Debug.Log("[PuckManager] Spawning 1 puck for phase Play");
                     __instance.Server_SpawnPuck(
                         new Vector3(0, UnityEngine.Random.Range(2f, 3f), 0),
-                        new Quaternion(
-                            UnityEngine.Random.Range(0f, 30f),
+                        Quaternion.Euler(
                             UnityEngine.Random.Range(0f, 30f),
                             UnityEngine.Random.Range(0f, 30f),
                             UnityEngine.Random.Range(0f, 30f)),
@@ -319,33 +318,6 @@ namespace CompetitivePuckTweaks.src
             ___skipLateTicks = false;
             ___snapshotInterpolationSettings.bufferLimit = 128;
             ___snapshotInterpolationSettings.bufferTimeMultiplier = 2.5f;
-        }
-    }
-
-    [HarmonyPatch(typeof(PlayerLegPad), "Awake")]
-    public class PlayerLegPadPatch
-    {
-        [HarmonyPostfix]
-        public static void Postfix(PlayerLegPad __instance, ref SerializedDictionary<PlayerLegPadState, Transform> ___positions)
-        {
-            if (___positions.ContainsKey(PlayerLegPadState.Butterfly))
-            {
-                Transform legPadPosition = ___positions[PlayerLegPadState.Butterfly];
-                if (legPadPosition.localPosition.x > 0)
-                {
-                    legPadPosition.localPosition += new Vector3(PluginCore.config.ButterflyPadOffset, 0, 0);
-                }
-                else
-                {
-                    legPadPosition.localPosition -= new Vector3(PluginCore.config.ButterflyPadOffset, 0, 0);
-                }
-
-                ___positions[PlayerLegPadState.Butterfly] = legPadPosition;
-            }
-            else
-            {
-                PluginCore.Log("Leg pad butterfly position NOT found");
-            }
         }
     }
 
@@ -387,6 +359,11 @@ namespace CompetitivePuckTweaks.src
             switch (command)
             {
                 case "/resetserver":
+                    if (GameManager.Instance == null)
+                    {
+                        SendSystemMessage(clientId, "<color=#ff9900>No active game to reset.</color>");
+                        return false;
+                    }
                     GameManager.Instance.Server_SetGameState(
                         phase: GamePhase.Warmup,
                         tick: 0,
@@ -403,13 +380,17 @@ namespace CompetitivePuckTweaks.src
 
                 case "/forcesync":
                 case "/fs":
-                    foreach (Player player in PlayerManager.Instance.GetPlayers())
+                {
+                    var players = PlayerManager.Instance?.GetPlayers();
+                    if (players != null)
                     {
-                        PluginCore.ManualSync(player.OwnerClientId);
+                        foreach (Player player in players)
+                            PluginCore.ManualSync(player.OwnerClientId);
                     }
 
                     SendSystemMessage(clientId, "Config synced to all clients.");
                     return false;
+                }
 
                 case "/reload":
                     ReloadServerConfig(clientId);
@@ -426,7 +407,9 @@ namespace CompetitivePuckTweaks.src
                 return true;
             }
 
-            Player player = PlayerManager.Instance.GetPlayerByClientId(clientId);
+            var pm = PlayerManager.Instance;
+            if (pm == null) return false;
+            Player player = pm.GetPlayerByClientId(clientId);
             if (player == null) return false;
 
             var adminMgr = ServerManager.Instance?.AdminManager;
@@ -456,13 +439,16 @@ namespace CompetitivePuckTweaks.src
 
                 try
                 {
-                    foreach (Player player in PlayerManager.Instance.GetPlayers())
+                    var players = PlayerManager.Instance?.GetPlayers();
+                    if (players != null)
                     {
-                        PluginCore.ManualSync(player.OwnerClientId);
+                        foreach (Player player in players)
+                            PluginCore.ManualSync(player.OwnerClientId);
                     }
                 }
-                catch
+                catch (Exception e)
                 {
+                    CompetitiveAdjustments.ConfigManager.LogWarning("ReloadServerConfig per-player manual sync failed: " + e.Message);
                 }
 
                 SendSystemMessage(clientId, "<color=#00ff00>Config reloaded successfully.</color>");

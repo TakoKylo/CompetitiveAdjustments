@@ -9,6 +9,8 @@ namespace CompetitivePuckTweaks.src
         [HarmonyPostfix]
         public static void Postfix(Stick __instance, ref GameObject ___shaftHandle, ref float ___shaftHandleProportionalGain)
         {
+            if (__instance == null) { Debug.LogError($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] Stick null on network post spawn"); return; }
+
             ___shaftHandleProportionalGain = PluginCore.config.ShaftHandleProportionalGain;
 
             BoxCollider boxCollider = null;
@@ -16,8 +18,6 @@ namespace CompetitivePuckTweaks.src
             StickMesh newStickMesh = __instance.gameObject.GetComponentInChildren<StickMesh>();
 
             if (newStickMesh == null) { PluginCore.Log($"StickMesh is null!"); return; }
-
-            if (__instance == null) { Debug.LogError($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] Stick null on network post spawn"); return; }
 
             // find meshcolliders
             MeshCollider[] newMeshColliders = newStickMesh.transform.GetComponentsInChildren<MeshCollider>();
@@ -129,16 +129,25 @@ namespace CompetitivePuckTweaks.src
         [HarmonyPrefix]
         public static bool Prefix(Stick __instance)
         {
-            BoxCollider thisBoxCol;
             if (PluginCore.config.BananaMode) return false;
             if (!PluginCore.config.UsePhysicsModificationEvents) return true;
-            StickMesh thisStickMesh = __instance.gameObject.GetComponentInChildren<StickMesh>();
-            if (PluginCore.config.EnableMidStickCollider) { thisBoxCol = __instance.GetComponent<BoxCollider>(); }
-            else { thisBoxCol = null; }
+            if (__instance == null) return true;
 
-            MeshCollider[] colliders = thisStickMesh.GetComponentsInChildren<MeshCollider>();
-            if (PluginCore.config.EnableMidStickCollider && PluginCore.StickMeshes.ContainsKey(thisBoxCol.GetInstanceID())) PluginCore.StickMeshes.Remove(thisBoxCol.GetInstanceID());
-            foreach (MeshCollider col in colliders) if (PluginCore.StickMeshes.ContainsKey(col.GetInstanceID())) PluginCore.StickMeshes.Remove(col.GetInstanceID());
+            // BoxCollider may or may not be attached. The mid-stick collider is
+            // only added in the spawn postfix when EnableMidStickCollider was
+            // true at that time, so flipping the config later means the
+            // BoxCollider doesn't exist on this stick. Just guard for null.
+            BoxCollider thisBoxCol = __instance.GetComponent<BoxCollider>();
+            if (thisBoxCol != null && PluginCore.StickMeshes.ContainsKey(thisBoxCol.GetInstanceID()))
+                PluginCore.StickMeshes.Remove(thisBoxCol.GetInstanceID());
+
+            StickMesh thisStickMesh = __instance.gameObject.GetComponentInChildren<StickMesh>();
+            if (thisStickMesh != null)
+            {
+                foreach (MeshCollider col in thisStickMesh.GetComponentsInChildren<MeshCollider>())
+                    if (col != null && PluginCore.StickMeshes.ContainsKey(col.GetInstanceID()))
+                        PluginCore.StickMeshes.Remove(col.GetInstanceID());
+            }
             return true;
         }
     }

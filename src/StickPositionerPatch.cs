@@ -97,7 +97,12 @@ namespace CompetitivePuckTweaks.src
                 return;
             }
 
-            FloatComponent runningAvg = __instance.gameObject.GetComponent<FloatComponent>();
+            // FloatComponent is added in the Awake patch only when EnableStickSpeedDecay
+            // was true at spawn. If the config is flipped on after a stick has already
+            // spawned (e.g. via /reload) the component is missing on that stick. Lazily
+            // attach so the speed-decay path doesn't NRE on those sticks.
+            FloatComponent runningAvg = __instance.gameObject.GetComponent<FloatComponent>()
+                ?? __instance.gameObject.AddComponent<FloatComponent>();
 
             runningAvg.value += ((__instance.Stick.Rigidbody.GetPointVelocity(__instance.Stick.BladeHandlePosition) - __instance.PlayerBody.Rigidbody.linearVelocity).magnitude - runningAvg.value) / PluginCore.config.StickSpeedDecaySpan;
 

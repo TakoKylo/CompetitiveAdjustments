@@ -49,6 +49,44 @@ namespace DashFallMod.Net
         public static IEnumerable<KeyValuePair<ushort, ChunkSlot>> Snapshot() => _slots;
         public static int Count => _slots.Count;
 
+        // Scratch buffer reused across promotion sweeps to avoid per-tick
+        // garbage from materialising the keys.
+        private static readonly List<ushort> _promoteScratch = new List<ushort>();
+
+        /// <summary>
+        /// Promote any slot whose pending switch tick has arrived, clearing
+        /// HasPending so Current is authoritative. Without this sweep, a slot
+        /// that takes longer than ~half the ushort tick range (~18 min at 30Hz)
+        /// without a follow-up announce wraps around and its old PendingTickId
+        /// starts looking "in the future" again, flipping ResolveAt back to the
+        /// stale Current chunk. Cheap: skip-fast when HasPending=false.
+        /// </summary>
+        public static void PromoteAllIfDue(ushort tick)
+        {
+            if (_slots.Count == 0) return;
+
+            _promoteScratch.Clear();
+            foreach (var kvp in _slots)
+            {
+                var slot = kvp.Value;
+                if (!slot.HasPending) continue;
+                // TickGE(tick, PendingTickId): pending tick has arrived.
+                if ((ushort)(tick - slot.PendingTickId) < 32768)
+                    _promoteScratch.Add(kvp.Key);
+            }
+
+            for (int i = 0; i < _promoteScratch.Count; i++)
+            {
+                ushort id = _promoteScratch[i];
+                var slot = _slots[id];
+                slot.Current = slot.Pending;
+                slot.HasPending = false;
+                slot.Pending = default;
+                slot.PendingTickId = 0;
+                _slots[id] = slot;
+            }
+        }
+
         /// <summary>
         /// Apply an incoming chunk announce (or initial-state entry) to the
         /// per-id slot.  If <paramref name="switchTickId"/> equals

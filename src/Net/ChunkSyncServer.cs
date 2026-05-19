@@ -144,6 +144,10 @@ namespace DashFallMod.Net
 
             ushort tick = GetCurrentTickId();
             ChunkRegistry.CurrentEncodeTickId = tick;
+            // Clear any stale Pending whose switch tick has arrived. Keeps
+            // ResolveAt accurate across the ushort tick wrap (~18 min at 30Hz)
+            // even for objects that haven't moved enough to re-announce.
+            ChunkRegistry.PromoteAllIfDue(tick);
 
             for (int i = _tracked.Count - 1; i >= 0; i--)
             {
@@ -169,7 +173,12 @@ namespace DashFallMod.Net
                 if (target == active) continue;
                 if (slot.HasPending && slot.Pending == target && !TickGE(tick, slot.PendingTickId)) continue;
 
-                ushort switchTick = (ushort)((tick + DeferTicks) % ushort.MaxValue);
+                // Natural ushort wrap (modulo 2^16). The sentinel ushort.MaxValue
+                // means "no pending switch"; if our wrap happens to land on it,
+                // bump forward by one tick so the announce is never confused with
+                // the sentinel.
+                ushort switchTick = (ushort)(tick + DeferTicks);
+                if (switchTick == ChunkRegistry.NoSwitchTickId) switchTick = 0;
                 ChunkRegistry.ApplyAnnounce(id, target, switchTick);
                 BroadcastSwitch(id, target, switchTick);
             }

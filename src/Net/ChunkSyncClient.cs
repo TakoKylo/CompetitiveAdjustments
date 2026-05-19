@@ -43,41 +43,84 @@ namespace DashFallMod.Net
         private static readonly Dictionary<ushort, FilterState> _filter
             = new Dictionary<ushort, FilterState>();
 
+        /// <summary>
+        /// Idempotent. First call installs Harmony patches and attempts to
+        /// register the CMM handler / request a bulk snapshot. Subsequent
+        /// calls skip the patch install (already done) but still retry the
+        /// CMM registration + snapshot request if those failed earlier --
+        /// otherwise a single CMM-was-null call would leave us permanently
+        /// without late-join snapshots until the next session teardown.
+        ///
+        /// Note: the only normal caller is NetworkBoundsPatch.EnableOpenWorldPrecision,
+        /// which is itself gated by ChunksActive. After the first successful
+        /// Enable that gate stays true, so the retry block here would never
+        /// fire on its own -- TickRegistrationRetry() must be polled to
+        /// actually drive the retry.
+        /// </summary>
         public static void Enable()
         {
-            if (_enabled) return;
-            _enabled = true;
-            _filter.Clear();
-
-            try
+            bool firstCall = !_enabled;
+            if (firstCall)
             {
-                if (_harmony == null) _harmony = new Harmony(HarmonyId);
+                _enabled = true;
+                _filter.Clear();
 
-                var rpc = AccessTools.Method(typeof(SynchronizedObjectManager), "Server_SynchronizeObjectsRpc");
-                if (rpc != null)
-                    _harmony.Patch(rpc, prefix: new HarmonyMethod(typeof(ChunkSyncClient), nameof(RpcPrefix)));
-                else
-                    Debug.LogWarning("[COMPADJUST] ChunkSyncClient: Server_SynchronizeObjectsRpc not found -- tickId stash disabled.");
+                try
+                {
+                    if (_harmony == null) _harmony = new Harmony(HarmonyId);
 
-                var tick   = AccessTools.Method(typeof(SynchronizedObject), "OnClientTick");
-                var smooth = AccessTools.Method(typeof(SynchronizedObject), "OnClientSmoothTick");
-                if (tick != null)
-                    _harmony.Patch(tick,   prefix: new HarmonyMethod(typeof(ChunkSyncClient), nameof(OnClientTickPrefix)));
-                if (smooth != null)
-                    _harmony.Patch(smooth, prefix: new HarmonyMethod(typeof(ChunkSyncClient), nameof(OnClientSmoothTickPrefix)));
+                    var rpc = AccessTools.Method(typeof(SynchronizedObjectManager), "Server_SynchronizeObjectsRpc");
+                    if (rpc != null)
+                        _harmony.Patch(rpc, prefix: new HarmonyMethod(typeof(ChunkSyncClient), nameof(RpcPrefix)));
+                    else
+                        Debug.LogWarning("[COMPADJUST] ChunkSyncClient: Server_SynchronizeObjectsRpc not found -- tickId stash disabled.");
 
-                EventManager.AddEventListener("Event_Everyone_OnSynchronizedObjectDespawned", OnDespawnedEvent);
+                    var tick   = AccessTools.Method(typeof(SynchronizedObject), "OnClientTick");
+                    var smooth = AccessTools.Method(typeof(SynchronizedObject), "OnClientSmoothTick");
+                    if (tick != null)
+                        _harmony.Patch(tick,   prefix: new HarmonyMethod(typeof(ChunkSyncClient), nameof(OnClientTickPrefix)));
+                    if (smooth != null)
+                        _harmony.Patch(smooth, prefix: new HarmonyMethod(typeof(ChunkSyncClient), nameof(OnClientSmoothTickPrefix)));
 
+                    EventManager.AddEventListener("Event_Everyone_OnSynchronizedObjectDespawned", OnDespawnedEvent);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning("[COMPADJUST] ChunkSyncClient patch install failed: " + ex.Message);
+                    return;
+                }
+            }
+
+            // Always retry registration + snapshot if they didn't take last
+            // time. RegisterCmmHandler / RequestBulkSnapshot are themselves
+            // null-safe and short-circuit when CMM is still unavailable.
+            if (!_cmmRegistered)
+            {
                 RegisterCmmHandler();
-                RequestBulkSnapshot();
+                if (_cmmRegistered)
+                    RequestBulkSnapshot();
+            }
 
+            if (firstCall)
+            {
                 CompetitiveAdjustments.ConfigManager.Log("ChunkSyncClient enabled (filter threshold " + RejectThresholdMeters
                           + " m, max " + MaxConsecutiveDrops + " consecutive drops).");
             }
-            catch (Exception ex)
-            {
-                Debug.LogWarning("[COMPADJUST] ChunkSyncClient patch install failed: " + ex.Message);
-            }
+        }
+
+        /// <summary>
+        /// Cheap poll used by an external ticker (GoalNetTweaks.Runner). Retries
+        /// CMM registration when the first Enable() call landed before
+        /// NetworkManager.CustomMessagingManager was ready. No-op once
+        /// registered, or when chunked sync is disabled.
+        /// </summary>
+        public static void TickRegistrationRetry()
+        {
+            if (!_enabled) return;
+            if (_cmmRegistered) return;
+            RegisterCmmHandler();
+            if (_cmmRegistered)
+                RequestBulkSnapshot();
         }
 
         public static void Disable()
@@ -231,6 +274,11 @@ namespace DashFallMod.Net
         public static void RpcPrefix(ushort tickId)
         {
             ChunkRegistry.CurrentDecodeTickId = tickId;
+            // Promote any due Pending before the original RPC body decodes
+            // positions. Otherwise a stale Pending whose tick wrapped past
+            // ~32k ticks flips ResolveAt back to the old Current, mis-decoding
+            // positions for stationary objects until the next announce arrives.
+            ChunkRegistry.PromoteAllIfDue(tickId);
         }
 
         public static void OnClientTickPrefix(SynchronizedObject __instance, ref Vector3 position)
