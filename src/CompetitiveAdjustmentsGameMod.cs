@@ -32,51 +32,27 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckPlugin
             Debug.Log($"[COMPADJUST] Enabling (isServer={isServer})…");
 
             // Initialize unified config before any sub-mods so the section
-            // enable flags are available when deciding what to load.
+            // enable flags are available when deciding what to load.  The
+            // ReloadConfig call below fires NotifyConfigReloaded which calls
+            // ApplySubModEnables; that creates the sub-mods we want.  We
+            // intentionally do NOT also create them inline here, otherwise
+            // they would be double-instantiated.
             if (isServer)
             {
                 CompetitiveAdjustments.ConfigManager.EnsureConfig();
                 CompetitiveAdjustments.ConfigManager.ReloadConfig();
             }
 
-            var cfg = CompetitiveAdjustments.ConfigManager.Config;
-
-            // DashFall runs on both sides; it self-gates client-only components.
-            if (cfg.EnableDashfall)
-            {
-                _dashFall = new DashFallGameMod();
-                if (!_dashFall.OnEnable())
-                    CompetitiveAdjustments.ConfigManager.LogWarning("DashFall sub-mod failed to enable.");
-            }
-            else
-            {
-                CompetitiveAdjustments.ConfigManager.Log("DashFall sub-mod skipped (EnableDashfall=false).");
-            }
-
             _lifecycleHarmony = new Harmony("CompetitiveAdjustments.Lifecycle");
             _lifecycleHarmony.CreateClassProcessor(typeof(StartHostPatch)).Patch();
             _lifecycleHarmony.CreateClassProcessor(typeof(StartServerPatch)).Patch();
 
-            if (cfg.EnableCompTweaks)
-            {
-                if (isServer)
-                {
-                    _tweaks = new CompetitivePuckTweaks.src.PluginCore();
-                    if (!_tweaks.OnEnable())
-                        CompetitiveAdjustments.ConfigManager.LogWarning("Tweaks sub-mod failed to enable.");
-                }
-                else
-                {
-                    _companion = new CompetitiveCompanion.PluginCore();
-                    if (!_companion.OnEnable())
-                        CompetitiveAdjustments.ConfigManager.LogWarning("Companion sub-mod failed to enable.");
-                }
-            }
-            else
-            {
-                CompetitiveAdjustments.ConfigManager.Log("CompTweaks/Companion sub-mod skipped (EnableCompTweaks=false).");
-            }
+            // Belt-and-braces for the client path (no ReloadConfig was called)
+            // and the dedicated-server case where the NotifyConfigReloaded
+            // hook might have fired before _instance was assigned.
+            ApplySubModEnables();
 
+            var cfg = CompetitiveAdjustments.ConfigManager.Config;
             CompetitiveAdjustments.ConfigManager.Log(
                 $"Enabled.  Section enables: Dashfall={cfg.EnableDashfall} CompAdjust={cfg.EnableCompAdjust} CompTweaks={cfg.EnableCompTweaks}.");
             return true;
@@ -94,6 +70,13 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckPlugin
     /// a full mod reload.  Idempotent: bringing a sub-mod back online is
     /// just OnEnable, taking one offline is OnDisable, no-op if state
     /// already matches.
+    ///
+    /// Role detection combines IsHeadless (dedicated server) with
+    /// NetworkManager.IsServer (covers a hosting client after StartHost):
+    /// - dedicated server: _tweaks only
+    /// - pre-host client:  _companion only
+    /// - hosting client:   _companion (from OnEnable) plus _tweaks (after
+    ///                     StartHost fires EnsureServerRuntimeComponents)
     /// </summary>
     public void ApplySubModEnables()
     {
@@ -102,7 +85,11 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckPlugin
             var cfg = CompetitiveAdjustments.ConfigManager.Config;
             if (cfg == null) return;
 
-            // DashFall
+            bool isHeadless = IsHeadless;
+            var nm = Unity.Netcode.NetworkManager.Singleton;
+            bool isServerSide = isHeadless || (nm != null && nm.IsServer);
+
+            // DashFall (always wanted regardless of role)
             if (cfg.EnableDashfall && _dashFall == null)
             {
                 _dashFall = new DashFallGameMod();
@@ -118,11 +105,12 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckPlugin
                 CompetitiveAdjustments.ConfigManager.Log("DashFall sub-mod taken offline.");
             }
 
-            // CompTweaks (server) or Companion (client)
-            bool isServer = IsHeadless;
+            // Tweaks: server-side (dedicated server or host post-StartHost).
+            // Companion: any process with graphics (windowed client, including
+            // hosts).  A hosting client wants both.
             if (cfg.EnableCompTweaks)
             {
-                if (isServer && _tweaks == null)
+                if (isServerSide && _tweaks == null)
                 {
                     _tweaks = new CompetitivePuckTweaks.src.PluginCore();
                     if (!_tweaks.OnEnable())
@@ -130,7 +118,7 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckPlugin
                     else
                         CompetitiveAdjustments.ConfigManager.Log("Tweaks sub-mod brought online.");
                 }
-                else if (!isServer && _companion == null)
+                if (!isHeadless && _companion == null)
                 {
                     _companion = new CompetitiveCompanion.PluginCore();
                     if (!_companion.OnEnable())
@@ -192,12 +180,12 @@ public sealed class CompetitiveAdjustmentsGameMod : IPuckPlugin
         {
             CompetitiveAdjustments.ConfigManager.EnsureConfig();
             CompetitiveAdjustments.ConfigManager.ReloadConfig();
-
-            if (_tweaks == null)
-                _tweaks = new CompetitivePuckTweaks.src.PluginCore();
-
-            if (!_tweaks.OnEnable())
-                CompetitiveAdjustments.ConfigManager.LogWarning("Tweaks sub-mod failed to enable in host/practice mode.");
+            // ReloadConfig fires NotifyConfigReloaded -> ApplySubModEnables,
+            // which now creates _tweaks only when EnableCompTweaks is true
+            // and the process is server-side (covers the host case via
+            // NetworkManager.IsServer).  Call once more explicitly so this
+            // path stays correct even if the ConfigManager hook is bypassed.
+            ApplySubModEnables();
         }
         catch (Exception ex)
         {
