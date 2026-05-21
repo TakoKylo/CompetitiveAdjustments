@@ -1,6 +1,6 @@
-using System;
 using System.Collections.Generic;
 using HarmonyLib;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace CompetitivePuckTweaks.src
@@ -8,90 +8,98 @@ namespace CompetitivePuckTweaks.src
     [HarmonyPatch(typeof(PlayerBodyV2), "OnNetworkPostSpawn")]
     public class BoardColliderPatch
     {
-        private static List<Collider> foundBoardColliders = new List<Collider>();
-        
+        // Substring set kept lowercase to match against collider.name.ToLowerInvariant()
+        // once per scan. Hot-path string allocation is avoided by precomputing this set
+        // and caching results across player spawns until the scene drops them.
+        private static readonly string[] BoardNameSubstrings =
+            { "left", "right", "front", "back", "top", "barrier", "board", "wall" };
+
+        private static readonly List<Collider> foundBoardColliders = new List<Collider>();
+        private static bool _scanned;
+
         [HarmonyPostfix]
         public static void Postfix()
         {
-            if (!PluginCore.config.EnableSoftBoards)
-                return;
-                
-            // Always try to find board colliders (in case they weren't loaded yet)
-            if (foundBoardColliders.Count == 0)
+            // Soft-board physics is server-authoritative; reading it from
+            // PluginCore.config (CompTweaks) on a remote client picks up
+            // local default values and would diverge from the host.
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsServer) return;
+
+            if (!PluginCore.config.EnableSoftBoards) return;
+
+            // Drop any destroyed-but-still-referenced colliders before deciding
+            // whether to re-scan. Without this, a scene reload would keep
+            // foundBoardColliders.Count > 0 even though every entry is dead.
+            for (int i = foundBoardColliders.Count - 1; i >= 0; i--)
+                if (foundBoardColliders[i] == null) foundBoardColliders.RemoveAt(i);
+
+            if (foundBoardColliders.Count == 0 || !_scanned)
             {
                 FindBoardColliders();
+                _scanned = true;
             }
-            
-            // Re-apply physics to found colliders (in case config changed)
-            if (foundBoardColliders.Count > 0)
+
+            // Re-apply physics to found colliders (in case config changed).
+            for (int i = 0; i < foundBoardColliders.Count; i++)
             {
-                foreach (Collider collider in foundBoardColliders)
-                {
+                var collider = foundBoardColliders[i];
+                if (collider != null)
                     ApplySoftBoardPhysics(collider);
-                }
             }
         }
-        
+
         private static void FindBoardColliders()
         {
-            // Find all colliders that are likely board pieces
-            Collider[] allColliders = UnityEngine.Object.FindObjectsByType<Collider>(FindObjectsSortMode.None);
+            Collider[] allColliders = Object.FindObjectsByType<Collider>(FindObjectsSortMode.None);
             foundBoardColliders.Clear();
-            
-            foreach (Collider collider in allColliders)
+
+            for (int i = 0; i < allColliders.Length; i++)
             {
-                string colliderName = collider.name.ToLower();
-                
-                // Look for colliders that are likely board pieces
-                if (colliderName.Contains("collider") &&
-                    (colliderName.Contains("left") ||
-                     colliderName.Contains("right") ||
-                     colliderName.Contains("front") ||
-                     colliderName.Contains("back") ||
-                     colliderName.Contains("top") ||
-                     colliderName.Contains("barrier") ||
-                     colliderName.Contains("board") ||
-                     colliderName.Contains("wall")))
+                var collider = allColliders[i];
+                string name = collider.name.ToLowerInvariant();
+                if (name.IndexOf("collider") < 0) continue;
+
+                bool matched = false;
+                for (int j = 0; j < BoardNameSubstrings.Length; j++)
+                {
+                    if (name.IndexOf(BoardNameSubstrings[j]) >= 0) { matched = true; break; }
+                }
+
+                if (matched)
                 {
                     foundBoardColliders.Add(collider);
                     PluginCore.Log($"Found board collider: {collider.name}");
                 }
             }
-            
+
             PluginCore.Log($"Found {foundBoardColliders.Count} board colliders to modify");
         }
-        
+
         private static void ApplySoftBoardPhysics(Collider collider)
         {
-            // Create or get physics material for the collider
-            PhysicsMaterial boardMaterial = collider.material;
-            if (boardMaterial == null)
+            PhysicsMaterial mat = collider.material;
+            if (mat == null)
             {
-                boardMaterial = new PhysicsMaterial("SoftBoardMaterial");
-                collider.material = boardMaterial;
+                mat = new PhysicsMaterial("SoftBoardMaterial");
+                collider.material = mat;
             }
-            
-            // Apply soft board properties
-            boardMaterial.bounciness = PluginCore.config.BoardBounciness;
-            boardMaterial.dynamicFriction = PluginCore.config.BoardFriction;
-            boardMaterial.staticFriction = PluginCore.config.BoardFriction;
-            boardMaterial.bounceCombine = PhysicsMaterialCombine.Average;
-            boardMaterial.frictionCombine = PhysicsMaterialCombine.Average;
-            
-            // If the collider has a rigidbody, make it softer
-            Rigidbody rb = collider.GetComponent<Rigidbody>();
-            if (rb != null)
-            {
-                // Make the rigidbody softer by reducing its mass and adding damping
-                rb.mass = Mathf.Max(0.1f, rb.mass * PluginCore.config.BoardSoftness);
-                rb.linearDamping = 0.5f;
-                rb.angularDamping = 0.5f;
-                
-                // Make it kinematic so it doesn't move but still responds to collisions
+
+            mat.bounciness = PluginCore.config.BoardBounciness;
+            mat.dynamicFriction = PluginCore.config.BoardFriction;
+            mat.staticFriction = PluginCore.config.BoardFriction;
+            mat.bounceCombine = PhysicsMaterialCombine.Average;
+            mat.frictionCombine = PhysicsMaterialCombine.Average;
+
+            // Lock the attached Rigidbody (if any) to kinematic so a soft
+            // collision material doesn't let the board itself drift. Prior
+            // code also wrote rb.mass and damping; both are inert under
+            // kinematic, so they're not restored.
+            Rigidbody rb = collider.attachedRigidbody;
+            if (rb != null && !rb.isKinematic)
                 rb.isKinematic = true;
-            }
-            
-            PluginCore.Dbg($"Applied soft board physics to {collider.name} (bounciness: {boardMaterial.bounciness}, friction: {boardMaterial.dynamicFriction})");
+
+            PluginCore.Dbg($"Applied soft board physics to {collider.name} (bounciness: {mat.bounciness}, friction: {mat.dynamicFriction})");
         }
     }
 }

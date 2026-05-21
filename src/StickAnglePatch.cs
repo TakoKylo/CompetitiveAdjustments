@@ -30,8 +30,11 @@ namespace CompetitivePuckTweaks.src
         internal static readonly AccessTools.FieldRef<PlayerInput, float> bladeAngleBufferRef =
             AccessTools.FieldRefAccess<PlayerInput, float>("bladeAngleBuffer");
 
+        // Routed through CompAdjustEffective so EnableCompAdjust=false silences
+        // FreeBlade AND HighSticking at the same time, without each consumer
+        // needing its own master check.
         internal static CompetitiveAdjustments.CompAdjustConfig Cfg =>
-            CompetitiveAdjustments.ConfigManager.Config.CompAdjust;
+            CompetitiveAdjustments.ConfigManager.CompAdjustEffective;
 
         // Saved vanilla blade angle limits per player (captured before first modification)
         private static readonly Dictionary<int, (int min, int max)> _savedBladeAngles =
@@ -196,7 +199,7 @@ namespace CompetitiveCompanion
             // Save vanilla limits before modification so config sync can restore them
             StickAngleRefs.SaveOriginals(__instance.Player);
 
-            var cfg = DashFallMod.ConfigManager.CompAdjust;
+            var cfg = DashFallMod.ConfigManager.CompAdjustEffective;
             if (!cfg.FreeBladeEnabled) return;
 
             StickAngleRefs.minBladeRef(__instance.Player.PlayerInput) = -127;
@@ -212,19 +215,18 @@ namespace CompetitiveCompanion
         [HarmonyPrefix]
         public static bool Prefix(PlayerInput __instance, InputAction.CallbackContext context)
         {
-            var cfg = DashFallMod.ConfigManager.CompAdjust;
+            var cfg = DashFallMod.ConfigManager.CompAdjustEffective;
             if (!cfg.FreeBladeEnabled) return true;
 
             if (GlobalStateManager.UIState.IsMouseRequired) return false;
             if (__instance.Player?.Stick == null) return false;
 
+            var clientCfg = DashFallMod.Client.DashFallConfigLoader.ClientConfig;
+            if (clientCfg == null || !clientCfg.FreeBladeSpinLockEnabled) return true;
+
             float buf = StickAngleRefs.bladeAngleBufferRef(__instance);
             buf += context.ReadValue<float>();
-
-            const float MIN = -127f, MAX = 127f;
-            float range = MAX - MIN + 1;
-            if (buf > MAX) buf -= range;
-            if (buf < MIN) buf += range;
+            buf = Mathf.Clamp(buf, clientCfg.FreeBladeSpinMin, clientCfg.FreeBladeSpinMax);
 
             StickAngleRefs.bladeAngleBufferRef(__instance) = buf;
             __instance.BladeAngleInput.ClientValue = (sbyte)buf;
@@ -240,19 +242,18 @@ namespace CompetitiveCompanion
         [HarmonyPrefix]
         public static bool Prefix(PlayerInput __instance, InputAction.CallbackContext context)
         {
-            var cfg = DashFallMod.ConfigManager.CompAdjust;
+            var cfg = DashFallMod.ConfigManager.CompAdjustEffective;
             if (!cfg.FreeBladeEnabled) return true;
 
             if (GlobalStateManager.UIState.IsMouseRequired) return false;
             if (__instance.Player?.Stick == null) return false;
 
+            var clientCfg = DashFallMod.Client.DashFallConfigLoader.ClientConfig;
+            if (clientCfg == null || !clientCfg.FreeBladeSpinLockEnabled) return true;
+
             float buf = StickAngleRefs.bladeAngleBufferRef(__instance);
             buf -= context.ReadValue<float>();
-
-            const float MIN = -127f, MAX = 127f;
-            float range = MAX - MIN + 1;
-            if (buf > MAX) buf -= range;
-            if (buf < MIN) buf += range;
+            buf = Mathf.Clamp(buf, clientCfg.FreeBladeSpinMin, clientCfg.FreeBladeSpinMax);
 
             StickAngleRefs.bladeAngleBufferRef(__instance) = buf;
             __instance.BladeAngleInput.ClientValue = (sbyte)buf;

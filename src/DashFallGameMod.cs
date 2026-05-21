@@ -80,25 +80,31 @@ public sealed class DashFallGameMod
         ServerBridge.OnAction -= OnClientAction;
         ServerBridge.Unhook();
         _harmony?.UnpatchSelf();
-        
+
         EventManager.RemoveEventListener("Event_OnPlayerBodySpawned", OnBodySpawned);
         EventManager.RemoveEventListener("Event_OnPlayerRoleChanged", OnRoleChanged);
-        
+
+        // Tear down CMM handlers our subsystems registered via the per-frame
+        // EnsureCMMRegistered polls. Without this, a plugin disable/re-enable
+        // cycle leaves the old handlers attached against the previous CMM.
+        try { GoalieDashExtend.Disable(); } catch (Exception e) { ConfigManager.Dbg("GoalieDashExtend.Disable failed: " + e.Message); }
+        try { Stances.Disable(); } catch (Exception e) { ConfigManager.Dbg("Stances.Disable failed: " + e.Message); }
+
         // Unregister from ModMenuHub
         try
         {
             PonceMods.Shared.ModMenuHub.UnregisterMod("DashFall");
             ConfigManager.Dbg("Unregistered from ModMenuHub");
         }
-        catch { }
-        
+        catch (System.Exception e) { ConfigManager.Dbg("ModMenuHub.UnregisterMod failed: " + e.Message); }
+
         // Destroy the client runner
         var clientRunner = UnityEngine.Object.FindFirstObjectByType<DashFallMod.Client.DashFallClientRunner>();
         if (clientRunner != null)
         {
             UnityEngine.Object.Destroy(clientRunner.gameObject);
         }
-        
+
         ConfigManager.Dbg("Disabled");
         return true;
     }

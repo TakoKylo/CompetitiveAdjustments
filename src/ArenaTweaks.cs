@@ -3,8 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Reflection.Emit;
-using HarmonyLib;
+using DashFallMod.Net;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -27,10 +26,9 @@ namespace DashFallMod
         private const string CollidersChildName  = "Colliders";
 
         // ── Arena network bounds + audio environment state ────────────────────
-        private static Harmony _arenaBoundsHarmony;
-        private static bool    _networkBoundsPatched;
         private static AudioReverbZone _cachedReverbZone;
         private static float   _originalReverbMaxDistance = -1f;
+        private static bool    _loggedVanillaServerSkip;
 
         private static void SyncArenaVisuals(
             bool enabled,
@@ -1556,11 +1554,12 @@ namespace DashFallMod
 
         // ── Arena network bounds patches ──────────────────────────────────────
         // Applied when EnableArenaTweaks is true; unapplied when it is turned off.
-        // Uses a dedicated Harmony instance so unpatch only affects these methods.
+        // Replaces vanilla 16-bit position quantisation with the chunked-sync
+        // system in src/Net/, keeping vanilla 1.5 mm precision out to +/-4 km.
 
         private static void ApplyNetworkBoundsPatches()
         {
-            if (_networkBoundsPatched) return;
+            if (NetworkBoundsPatch.ChunksEnabled) return;
 
             // Guard 1: no active network session — the DontDestroyOnLoad Runner can fire
             // RefreshAll() after disconnect or after mod disable; bail out in that case.
@@ -1568,62 +1567,59 @@ namespace DashFallMod
             if (nm == null) return;
 
             // Guard 2: if we're a client, only apply when we have actually received a
-            // config sync from the current server (meaning the server has this mod and
-            // has EnableArenaTweaks=true).  Without this guard the Runner re-applies
-            // patches from the local config file when joining a vanilla server.
-            if (!nm.IsServer && !_hasSyncedTweaks) return;
-
-            // Set the modded values on the statics so the transpiler and postfix use them.
-            // Precision 300 gives ~3.3mm quantization (vs 10mm at 100) while still supporting
-            // arena positions up to +/-109 units. Keeps player movement smooth.
-            ArenaBoundsHelper.ActivePrecision = 300f;
-            ArenaBoundsHelper.ActiveThreshold = 0.005f;
-
-            try
+            // PPKB/GoalTweaks sync from the current server.  That message is sent only
+            // by servers running this mod (see DashFall.ServerBridge), so its absence
+            // means we're on a vanilla server and the chunked sync must stay inert --
+            // installing the encode/decode prefix here would desync us from the server.
+            if (!nm.IsServer && !_hasSyncedTweaks)
             {
-                _arenaBoundsHarmony ??= new Harmony("compadjust.arenabounds");
-
-                var encode = AccessTools.Method(typeof(SynchronizedObjectManager), "EncodeSynchronizedObject");
-                var decode = AccessTools.Method(typeof(SynchronizedObjectManager), "DecodeSynchronizedObjectData");
-                var awake  = AccessTools.Method(typeof(SynchronizedObject), "Awake");
-
-                var transpiler = new HarmonyMethod(typeof(ArenaBoundsHelper), nameof(ArenaBoundsHelper.PrecisionTranspiler));
-                var postfix    = new HarmonyMethod(typeof(ArenaBoundsHelper), nameof(ArenaBoundsHelper.ThresholdPostfix));
-
-                if (encode != null) _arenaBoundsHarmony.Patch(encode, transpiler: transpiler);
-                if (decode != null) _arenaBoundsHarmony.Patch(decode, transpiler: transpiler);
-                if (awake  != null) _arenaBoundsHarmony.Patch(awake,  postfix:    postfix);
-
-                ArenaBoundsHelper.ApplyThresholdToExisting();
-
-                _networkBoundsPatched = true;
-                CompetitiveAdjustments.ConfigManager.Log($"Arena network bounds patches applied (precision 655→{ArenaBoundsHelper.ActivePrecision}, threshold 1mm→{1000 * ArenaBoundsHelper.ActiveThreshold}mm, players excluded).");
+                if (!_loggedVanillaServerSkip)
+                {
+                    _loggedVanillaServerSkip = true;
+                    CompetitiveAdjustments.ConfigManager.Log("Chunked network sync NOT enabled: no PPKB/GoalTweaks received -- server is vanilla or has this mod disabled.");
+                }
+                return;
             }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[COMPADJUST] Failed to apply network bounds patches: {ex.Message}");
-            }
+
+            _loggedVanillaServerSkip = false;
+            NetworkBoundsPatch.EnableOpenWorldPrecision();
+            LogRequiredChunks();
         }
 
         internal static void RemoveNetworkBoundsPatches()
         {
-            if (!_networkBoundsPatched) return;
-            try
-            {
-                _arenaBoundsHarmony?.UnpatchSelf();
-                _networkBoundsPatched = false;
+            _loggedVanillaServerSkip = false;
+            NetworkBoundsPatch.Disable();
+        }
 
-                // Restore positionThreshold on all existing SynchronizedObjects
-                // back to the vanilla default so they behave correctly on vanilla servers.
-                ArenaBoundsHelper.RestoreThresholdToExisting();
-                ArenaBoundsHelper.ActivePrecision = ArenaBoundsHelper.VANILLA_PRECISION;
-                ArenaBoundsHelper.ActiveThreshold = ArenaBoundsHelper.VANILLA_THRESHOLD;
-                CompetitiveAdjustments.ConfigManager.Log("Arena network bounds patches removed.");
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[COMPADJUST] Failed to remove network bounds patches: {ex.Message}");
-            }
+        // Vanilla rink half-extent along X / Z used to derive required chunk
+        // counts from ArenaScale[XZ].  Y is not chunked.
+        private const float VanillaArenaHalfExtentX = 50f;
+        private const float VanillaArenaHalfExtentZ = 25f;
+
+        private static void LogRequiredChunks()
+        {
+            var nm = Unity.Netcode.NetworkManager.Singleton;
+            bool useSynced = _hasSyncedTweaks && nm != null && !nm.IsServer;
+            var cfg = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust;
+
+            float scaleX = useSynced ? _syncedArenaScaleX : (cfg?.ArenaScaleX ?? 1f);
+            float scaleZ = useSynced ? _syncedArenaScaleZ : (cfg?.ArenaScaleZ ?? 1f);
+            if (scaleX <= 0f) scaleX = 1f;
+            if (scaleZ <= 0f) scaleZ = 1f;
+
+            float halfX = VanillaArenaHalfExtentX * scaleX;
+            float halfZ = VanillaArenaHalfExtentZ * scaleZ;
+            int requiredChunksX = Mathf.CeilToInt(halfX / ChunkRegistry.ChunkSizeMeters);
+            int requiredChunksZ = Mathf.CeilToInt(halfZ / ChunkRegistry.ChunkSizeMeters);
+            int maxChunkIndex = Mathf.Max(requiredChunksX, requiredChunksZ);
+
+            CompetitiveAdjustments.ConfigManager.Log(
+                $"Arena half-extent X={halfX:F1}m Z={halfZ:F1}m (scale X={scaleX:F2} Z={scaleZ:F2}); " +
+                $"required chunks per axis: X={requiredChunksX} Z={requiredChunksZ}; chunk-index limit +/-{sbyte.MaxValue} (~{sbyte.MaxValue * ChunkRegistry.ChunkSizeMeters:F0}m).");
+
+            if (maxChunkIndex > sbyte.MaxValue)
+                Debug.LogWarning($"[COMPADJUST] Required chunk index {maxChunkIndex} exceeds sbyte range; positions beyond +/-{sbyte.MaxValue * ChunkRegistry.ChunkSizeMeters:F0}m will clamp.");
         }
 
         // ── Audio environment adjustment ──────────────────────────────────────
@@ -1664,95 +1660,4 @@ namespace DashFallMod
         }
     }
 
-    // ── Transpiler / postfix helpers (no [HarmonyPatch] — manually applied) ──
-    internal static class ArenaBoundsHelper
-    {
-        // The original precision constant in SynchronizedObjectManager.
-        internal const float VANILLA_PRECISION = 655f;
-        // The vanilla default for SynchronizedObject.positionThreshold (1 mm).
-        internal const float VANILLA_THRESHOLD  = 0.001f;
-
-        // Runtime-configured precision and threshold.
-        // The transpiler emits ldsfld for these, so changing the values here
-        // affects all subsequent calls to the patched encode/decode methods.
-        internal static float ActivePrecision = VANILLA_PRECISION;
-        internal static float ActiveThreshold = VANILLA_THRESHOLD;
-
-        internal static IEnumerable<CodeInstruction> PrecisionTranspiler(IEnumerable<CodeInstruction> instructions)
-        {
-            var precisionField = typeof(ArenaBoundsHelper).GetField(
-                nameof(ActivePrecision), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
-
-            foreach (var instruction in instructions)
-            {
-                if (instruction.opcode == OpCodes.Ldc_R4 && (float)instruction.operand == VANILLA_PRECISION && precisionField != null)
-                    // Replace ldc.r4 655 with ldsfld ArenaBoundsHelper.ActivePrecision
-                    // so the patched method reads the runtime value every call.
-                    yield return new CodeInstruction(OpCodes.Ldsfld, precisionField);
-                else
-                    yield return instruction;
-            }
-        }
-
-        // Raise the position update threshold so that floating-point noise at the
-        // chosen precision level does not spam the network with spurious micro-moves.
-        // Skip player-related objects to prevent movement jitter.
-        internal static void ThresholdPostfix(SynchronizedObject __instance)
-        {
-            if (IsPlayerRelated(__instance)) return;
-            ApplyThreshold(__instance);
-        }
-
-        internal static void ApplyThresholdToExisting()
-        {
-            var field = typeof(SynchronizedObject).GetField("positionThreshold",
-                BindingFlags.NonPublic | BindingFlags.Instance);
-            if (field == null) return;
-            foreach (var so in UnityEngine.Object.FindObjectsByType<SynchronizedObject>(FindObjectsSortMode.None))
-            {
-                if (so == null) continue;
-                if (IsPlayerRelated(so)) continue;
-                ApplyThreshold(so, field);
-            }
-        }
-
-        /// <summary>
-        /// Returns true for SynchronizedObjects attached to players, sticks, or pucks.
-        /// These must keep vanilla precision/threshold to avoid movement jitter.
-        /// </summary>
-        private static bool IsPlayerRelated(SynchronizedObject so)
-        {
-            if (so == null) return false;
-            return so.GetComponentInParent<PlayerBodyV2>() != null
-                || so.GetComponentInParent<Stick>() != null
-                || so.GetComponentInParent<Puck>() != null;
-        }
-
-        internal static void RestoreThresholdToExisting()
-        {
-            var field = typeof(SynchronizedObject).GetField("positionThreshold",
-                BindingFlags.NonPublic | BindingFlags.Instance);
-            if (field == null) return;
-            foreach (var so in UnityEngine.Object.FindObjectsByType<SynchronizedObject>(FindObjectsSortMode.None))
-            {
-                if (so == null) continue;
-                try { field.SetValue(so, VANILLA_THRESHOLD); } catch { }
-            }
-        }
-
-        private static void ApplyThreshold(SynchronizedObject so, FieldInfo field = null)
-        {
-            if (field == null)
-                field = typeof(SynchronizedObject).GetField("positionThreshold",
-                    BindingFlags.NonPublic | BindingFlags.Instance);
-            if (field == null) return;
-            try
-            {
-                float current = (float)field.GetValue(so);
-                if (current < ActiveThreshold)
-                    field.SetValue(so, ActiveThreshold);
-            }
-            catch { }
-        }
-    }
 }

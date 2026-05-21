@@ -541,6 +541,24 @@ namespace DashFallMod.Client
                 DashFallConfigLoader.SaveClientConfig(clientConfig);
             }));
 
+            _actionsSection.Add(MakeToggleRow("FREE BLADE SPIN LOCK", "Lock blade spin to client min/max (off = vanilla range)", clientConfig.FreeBladeSpinLockEnabled, (val) =>
+            {
+                clientConfig.FreeBladeSpinLockEnabled = val;
+                DashFallConfigLoader.SaveClientConfig(clientConfig);
+            }));
+
+            _actionsSection.Add(MakeFloatRow("FREE BLADE SPIN MIN", "Lower bound for free spin stick lock (client-side)", clientConfig.FreeBladeSpinMin, -127f, 127f, (val) =>
+            {
+                clientConfig.FreeBladeSpinMin = val;
+                DashFallConfigLoader.SaveClientConfig(clientConfig);
+            }));
+
+            _actionsSection.Add(MakeFloatRow("FREE BLADE SPIN MAX", "Upper bound for free spin stick lock (client-side)", clientConfig.FreeBladeSpinMax, -127f, 127f, (val) =>
+            {
+                clientConfig.FreeBladeSpinMax = val;
+                DashFallConfigLoader.SaveClientConfig(clientConfig);
+            }));
+
             // Sprint shoulder trail toggle (client preference)
             _actionsSection.Add(MakeToggleRow("SPRINT SHOULDER TRAIL", "Show white shoulder trails while sprinting", clientConfig.EnableSprintShoulderTrail, (val) =>
             {
@@ -728,6 +746,7 @@ namespace DashFallMod.Client
             input.style.backgroundColor = new UITK.StyleColor(TextFieldBg);
             input.style.color = Color.white;
             ForceUIFont(input);
+            input.RegisterCallback<FocusInEvent>(_ => input.schedule.Execute(() => input.SelectAll()));
             input.RegisterCallback<FocusOutEvent>(_ =>
             {
                 if (!float.TryParse(input.value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
@@ -737,6 +756,7 @@ namespace DashFallMod.Client
                 }
 
                 parsed = Mathf.Clamp(parsed, min, max);
+                currentValue = parsed;
                 input.value = parsed.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
                 onChanged?.Invoke(parsed);
             });

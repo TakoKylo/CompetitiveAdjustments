@@ -170,7 +170,12 @@ namespace CompetitiveCompanion
 
         public static void UnloadSyncHandler(Dictionary<string, object> message = null)
         {
-            if (NetworkManager.Singleton.CustomMessagingManager != null) NetworkManager.Singleton.CustomMessagingManager.UnregisterNamedMessageHandler(CMM_SYNC_CONFIG);
+            var cmm = NetworkManager.Singleton?.CustomMessagingManager;
+            if (cmm != null)
+            {
+                try { cmm.UnregisterNamedMessageHandler(CMM_SYNC_CONFIG); }
+                catch (Exception e) { Debug.LogWarning($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] UnloadSyncHandler unregister failed: {e.Message}"); }
+            }
             Debug.Log($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] Unregistered config sync message handler");
             ResetPuckScale();
         }
@@ -444,10 +449,14 @@ namespace CompetitiveCompanion
                 if (PuckManager.Instance != null)
                 {
                     List<Puck> pucks = PuckManager.Instance.GetPucks();
-                    Debug.Log($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] Applying PuckScale {receivedPackage.PuckScale} to {pucks.Count} existing pucks");
-                    foreach (Puck puck in pucks)
+                    if (pucks != null)
                     {
-                        puck.transform.localScale = UnityEngine.Vector3.one * config.PuckScale;
+                        Debug.Log($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] Applying PuckScale {receivedPackage.PuckScale} to {pucks.Count} existing pucks");
+                        foreach (Puck puck in pucks)
+                        {
+                            if (puck == null) continue;
+                            puck.transform.localScale = UnityEngine.Vector3.one * config.PuckScale;
+                        }
                     }
                 }
             }

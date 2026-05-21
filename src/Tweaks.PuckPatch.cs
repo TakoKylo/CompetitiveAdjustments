@@ -9,6 +9,13 @@ namespace CompetitivePuckTweaks.src
     [HarmonyPatch(typeof(Puck), "OnNetworkPostSpawn")]
     public class PuckPatch
     {
+        // Throttle for the "heal missed sync" fan-out below. Multiple puck
+        // spawns in quick succession (warmup, multi-puck modes) used to send
+        // a ManualSync per puck per client; once per second is plenty since
+        // clients already pull sync via CMM_SYNC_REQUEST on their own.
+        private static float _nextServerFanoutAt;
+        private const float ServerFanoutCooldown = 1f;
+
         [HarmonyPostfix]
         public static void Postfix(Puck __instance, ref float ___maxSpeed, ref UnityEngine.Vector3 ___stickTensor)
         {
@@ -40,13 +47,20 @@ namespace CompetitivePuckTweaks.src
 
             // Timing guard: send latest config sync when a puck spawns on server.
             // This heals missed join-time sync and keeps client puck scale consistent.
+            // Throttled to once per ServerFanoutCooldown to avoid an N pucks x M
+            // clients burst on multi-puck spawns (warmup, etc.).
             var nm = NetworkManager.Singleton;
             if (nm != null && nm.IsServer)
             {
-                foreach (ulong clientId in nm.ConnectedClientsIds)
+                float now = Time.unscaledTime;
+                if (now >= _nextServerFanoutAt)
                 {
-                    if (clientId == NetworkManager.ServerClientId) continue;
-                    PluginCore.ManualSync(clientId);
+                    _nextServerFanoutAt = now + ServerFanoutCooldown;
+                    foreach (ulong clientId in nm.ConnectedClientsIds)
+                    {
+                        if (clientId == NetworkManager.ServerClientId) continue;
+                        PluginCore.ManualSync(clientId);
+                    }
                 }
             }
             else if (nm != null && nm.IsClient)

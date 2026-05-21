@@ -20,11 +20,26 @@ namespace DashFallMod
 {
     public static class ConfigManager
     {
+        // Default shortcut now returns the effective Dashfall config.  When
+        // EnableDashfall is off this is the all-features-disabled sentinel,
+        // so every consumer that does `cfg.SkaterDiveEnabled` etc. naturally
+        // sees false without needing its own master check.  UI display code
+        // that wants to show the user's saved intent should read
+        // ConfigRaw below.
         public static CompetitiveAdjustments.DashfallConfig Config =>
+            CompetitiveAdjustments.ConfigManager.DashfallEffective;
+
+        public static CompetitiveAdjustments.DashfallConfig ConfigRaw =>
             CompetitiveAdjustments.ConfigManager.Config.Dashfall;
 
         public static CompetitiveAdjustments.CompAdjustConfig CompAdjust =>
             CompetitiveAdjustments.ConfigManager.Config.CompAdjust;
+
+        // Use this anywhere a feature should be silenced when the top-level
+        // EnableCompAdjust master flag is off.  UI display code that wants to
+        // show the user's saved intent should keep reading CompAdjust above.
+        public static CompetitiveAdjustments.CompAdjustConfig CompAdjustEffective =>
+            CompetitiveAdjustments.ConfigManager.CompAdjustEffective;
 
         public static void EnsureConfig() =>
             CompetitiveAdjustments.ConfigManager.EnsureConfig();
@@ -94,7 +109,7 @@ namespace CompetitiveCompanion
             var mf = ___playerMesh.PlayerTorso.GetComponentInChildren<MeshFilter>();
             if (mf == null) return;
 
-            var df = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust;
+            var df = CompetitiveAdjustments.ConfigManager.CompAdjustEffective;
             bool showCustomVisual = PluginCore.torsoMesh != null
                 && !(df?.DisableCustomTorsoVisual == true)
                 && (DashFallMod.Client.DashFallConfigLoader.ClientConfig?.ShowCustomTorsoMesh ?? true);
@@ -133,7 +148,7 @@ namespace CompetitiveCompanion
             var body = __instance.GetComponentInParent<PlayerBodyV2>();
             if (body == null || body.name.Contains("Goalie")) return;
 
-            var dfCfg = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust;
+            var dfCfg = CompetitiveAdjustments.ConfigManager.CompAdjustEffective;
             bool customActive = PluginCore.torsoMesh != null
                                 && !(dfCfg?.DisableCustomTorsoVisual == true)
                                 && (DashFallMod.Client.DashFallConfigLoader.ClientConfig?.ShowCustomTorsoMesh ?? true);
@@ -277,8 +292,7 @@ namespace CompetitivePuckTweaks.src
                     Debug.Log("[PuckManager] Spawning 1 puck for phase Play");
                     __instance.Server_SpawnPuck(
                         new Vector3(0, UnityEngine.Random.Range(2f, 3f), 0),
-                        new Quaternion(
-                            UnityEngine.Random.Range(0f, 30f),
+                        Quaternion.Euler(
                             UnityEngine.Random.Range(0f, 30f),
                             UnityEngine.Random.Range(0f, 30f),
                             UnityEngine.Random.Range(0f, 30f)),
@@ -304,33 +318,6 @@ namespace CompetitivePuckTweaks.src
             ___skipLateTicks = false;
             ___snapshotInterpolationSettings.bufferLimit = 128;
             ___snapshotInterpolationSettings.bufferTimeMultiplier = 2.5f;
-        }
-    }
-
-    [HarmonyPatch(typeof(PlayerLegPad), "Awake")]
-    public class PlayerLegPadPatch
-    {
-        [HarmonyPostfix]
-        public static void Postfix(PlayerLegPad __instance, ref SerializedDictionary<PlayerLegPadState, Transform> ___positions)
-        {
-            if (___positions.ContainsKey(PlayerLegPadState.Butterfly))
-            {
-                Transform legPadPosition = ___positions[PlayerLegPadState.Butterfly];
-                if (legPadPosition.localPosition.x > 0)
-                {
-                    legPadPosition.localPosition += new Vector3(PluginCore.config.ButterflyPadOffset, 0, 0);
-                }
-                else
-                {
-                    legPadPosition.localPosition -= new Vector3(PluginCore.config.ButterflyPadOffset, 0, 0);
-                }
-
-                ___positions[PlayerLegPadState.Butterfly] = legPadPosition;
-            }
-            else
-            {
-                PluginCore.Log("Leg pad butterfly position NOT found");
-            }
         }
     }
 
@@ -372,6 +359,11 @@ namespace CompetitivePuckTweaks.src
             switch (command)
             {
                 case "/resetserver":
+                    if (GameManager.Instance == null)
+                    {
+                        SendSystemMessage(clientId, "<color=#ff9900>No active game to reset.</color>");
+                        return false;
+                    }
                     GameManager.Instance.Server_SetGameState(
                         phase: GamePhase.Warmup,
                         tick: 0,
@@ -388,13 +380,17 @@ namespace CompetitivePuckTweaks.src
 
                 case "/forcesync":
                 case "/fs":
-                    foreach (Player player in PlayerManager.Instance.GetPlayers())
+                {
+                    var players = PlayerManager.Instance?.GetPlayers();
+                    if (players != null)
                     {
-                        PluginCore.ManualSync(player.OwnerClientId);
+                        foreach (Player player in players)
+                            PluginCore.ManualSync(player.OwnerClientId);
                     }
 
                     SendSystemMessage(clientId, "Config synced to all clients.");
                     return false;
+                }
 
                 case "/reload":
                     ReloadServerConfig(clientId);
@@ -411,7 +407,9 @@ namespace CompetitivePuckTweaks.src
                 return true;
             }
 
-            Player player = PlayerManager.Instance.GetPlayerByClientId(clientId);
+            var pm = PlayerManager.Instance;
+            if (pm == null) return false;
+            Player player = pm.GetPlayerByClientId(clientId);
             if (player == null) return false;
 
             var adminMgr = ServerManager.Instance?.AdminManager;
@@ -441,13 +439,16 @@ namespace CompetitivePuckTweaks.src
 
                 try
                 {
-                    foreach (Player player in PlayerManager.Instance.GetPlayers())
+                    var players = PlayerManager.Instance?.GetPlayers();
+                    if (players != null)
                     {
-                        PluginCore.ManualSync(player.OwnerClientId);
+                        foreach (Player player in players)
+                            PluginCore.ManualSync(player.OwnerClientId);
                     }
                 }
-                catch
+                catch (Exception e)
                 {
+                    CompetitiveAdjustments.ConfigManager.LogWarning("ReloadServerConfig per-player manual sync failed: " + e.Message);
                 }
 
                 SendSystemMessage(clientId, "<color=#00ff00>Config reloaded successfully.</color>");

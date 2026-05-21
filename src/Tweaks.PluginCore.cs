@@ -20,7 +20,14 @@ namespace CompetitivePuckTweaks.src
         public Harmony _harmony = new Harmony("_harmony");
         public static Mesh torsoMesh;
         public static Mesh groinMesh;
-        public static CompetitiveAdjustments.CompTweaksConfig config => CompetitiveAdjustments.ConfigManager.Config.CompTweaks;
+        // Returns the effective CompTweaks config: live values when
+        // EnableCompTweaks is on, vanilla defaults when it is off.  Every
+        // patch that reads PluginCore.config.X automatically respects the
+        // master flag through this single accessor.
+        public static CompetitiveAdjustments.CompTweaksConfig config => CompetitiveAdjustments.ConfigManager.CompTweaksEffective;
+        // Raw config for the few UI / sync paths that need the user's saved
+        // intent regardless of the master flag.
+        public static CompetitiveAdjustments.CompTweaksConfig configRaw => CompetitiveAdjustments.ConfigManager.Config.CompTweaks;
         public static Dictionary<int, Stick> StickMeshes = new Dictionary<int, Stick>();
         public static List<int> PuckIDs = new List<int>();
         public static UtilObj utilObj = new UtilObj();
@@ -28,6 +35,16 @@ namespace CompetitivePuckTweaks.src
         private bool _enabled;
         private bool _physicsListenersLoaded;
         private bool _syncRequestHandlerRegistered;
+
+        // Captured vanilla values for the globally-applied physics knobs so
+        // OnDisable can restore them when the mod is toggled off at runtime.
+        // Without this, fixedDeltaTime / solverIterations / layer-collision
+        // masks stay on the modded values for the rest of the session.
+        private bool _vanillaPhysicsCaptured;
+        private float _vanillaFixedDeltaTime;
+        private int _vanillaSolverIterations;
+        private bool _vanillaIgnore_6_6;
+        private bool _vanillaIgnore_6_8;
 
         /// <summary>
         /// Core plugin enable function
@@ -71,8 +88,17 @@ namespace CompetitivePuckTweaks.src
 
                 EnsurePlayerMeshesLoadedForCurrentConfig();
 
+                if (!_vanillaPhysicsCaptured)
+                {
+                    _vanillaFixedDeltaTime = Time.fixedDeltaTime;
+                    _vanillaSolverIterations = Physics.defaultSolverIterations;
+                    _vanillaIgnore_6_6 = Physics.GetIgnoreLayerCollision(6, 6);
+                    _vanillaIgnore_6_8 = Physics.GetIgnoreLayerCollision(6, 8);
+                    _vanillaPhysicsCaptured = true;
+                }
+
                 if (config.DisableStickCollision) Physics.IgnoreLayerCollision(6, 6, true);
-                Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.Config?.CompAdjust?.StickBodyCollision == true));
+                Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.CompAdjustEffective?.StickBodyCollision == true));
 
                 Time.fixedDeltaTime = config.FixedDeltaTime;
                 Physics.defaultSolverIterations = config.SolverIterations;
@@ -125,6 +151,18 @@ namespace CompetitivePuckTweaks.src
                 EventListenersPresent = false;
                 _enabled = false;
                 if (_active == this) _active = null;
+
+                // Restore the global physics knobs we trampled in OnEnable so a
+                // mid-session toggle doesn't leave the game on the modded
+                // simulation step / layer mask.
+                if (_vanillaPhysicsCaptured)
+                {
+                    Time.fixedDeltaTime = _vanillaFixedDeltaTime;
+                    Physics.defaultSolverIterations = _vanillaSolverIterations;
+                    Physics.IgnoreLayerCollision(6, 6, _vanillaIgnore_6_6);
+                    Physics.IgnoreLayerCollision(6, 8, _vanillaIgnore_6_8);
+                    _vanillaPhysicsCaptured = false;
+                }
                 return true;
             }
             catch (Exception e)
@@ -244,7 +282,7 @@ namespace CompetitivePuckTweaks.src
 
         private static void EnsurePlayerMeshesLoadedForCurrentConfig()
         {
-            bool useCustomSkaterTorsoModel = DashFallMod.ConfigManager.CompAdjust.EnableCustomSkaterTorsoModel;
+            bool useCustomSkaterTorsoModel = DashFallMod.ConfigManager.CompAdjustEffective.EnableCustomSkaterTorsoModel;
             if (!config.EnableSmallerModels && !useCustomSkaterTorsoModel)
                 return;
 
@@ -412,18 +450,16 @@ namespace CompetitivePuckTweaks.src
         public static void ManualSync(ulong targetId)
         {
             Dbg($"Sending config sync message to client {targetId}...");
-            
-            ConfigSyncPackage messageContent = new ConfigSyncPackage(config, CompetitiveAdjustments.ConfigManager.Config?.CompAdjust);
-            var writer = new FastBufferWriter(1024, Unity.Collections.Allocator.Temp);
+
             var customMessagingManager = NetworkManager.Singleton?.CustomMessagingManager;
             if (customMessagingManager == null)
             {
                 Log("Config sync skipped: CustomMessagingManager is null.");
-                writer.Dispose();
                 return;
             }
 
-            using (writer)
+            ConfigSyncPackage messageContent = new ConfigSyncPackage(config, CompetitiveAdjustments.ConfigManager.CompAdjustEffective);
+            using (var writer = new FastBufferWriter(1024, Unity.Collections.Allocator.Temp))
             {
                 writer.WriteValueSafe(messageContent);
                 customMessagingManager.SendNamedMessage(CMM_SYNC_CONFIG, targetId, writer);
@@ -523,7 +559,7 @@ namespace CompetitivePuckTweaks.src
 
             EnsurePlayerMeshesLoadedForCurrentConfig();
             Physics.IgnoreLayerCollision(6, 6, config.DisableStickCollision);
-            Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.Config?.CompAdjust?.StickBodyCollision == true));
+            Physics.IgnoreLayerCollision(6, 8, !(CompetitiveAdjustments.ConfigManager.CompAdjustEffective?.StickBodyCollision == true));
             Time.fixedDeltaTime = config.FixedDeltaTime;
             Physics.defaultSolverIterations = config.SolverIterations;
 
@@ -561,13 +597,13 @@ namespace CompetitivePuckTweaks.src
 
         // Uniform scale (used for legacy single-axis paths and cache comparison fallback)
         internal static float EffectiveTorsoMeshScale =>
-            torsoMeshScale * (DashFallMod.ConfigManager.CompAdjust?.CustomTorsoScaleX ?? 1f);
+            torsoMeshScale * (DashFallMod.ConfigManager.CompAdjustEffective?.CustomTorsoScaleX ?? 1f);
 
         internal static Vector3 EffectiveTorsoMeshScaleV3
         {
             get
             {
-                var cfg = DashFallMod.ConfigManager.CompAdjust;
+                var cfg = DashFallMod.ConfigManager.CompAdjustEffective;
                 return new Vector3(
                     torsoMeshScale * (cfg?.CustomTorsoScaleX ?? 1f),
                     torsoMeshScale * (cfg?.CustomTorsoScaleY ?? 1f),
@@ -589,7 +625,7 @@ namespace CompetitivePuckTweaks.src
         {
             get
             {
-                var df = DashFallMod.ConfigManager.CompAdjust;
+                var df = DashFallMod.ConfigManager.CompAdjustEffective;
                 float s = VisualTorsoMeshScale;
                 return new Vector3(
                     s * (df?.CustomTorsoScaleX ?? 1f),
@@ -600,7 +636,7 @@ namespace CompetitivePuckTweaks.src
 
         // True when the server or client wants the custom torso VISUAL suppressed.
         internal static bool TorsoVisualDisabled =>
-            (DashFallMod.ConfigManager.CompAdjust?.DisableCustomTorsoVisual == true) ||
+            (DashFallMod.ConfigManager.CompAdjustEffective?.DisableCustomTorsoVisual == true) ||
             !(DashFallMod.Client.DashFallConfigLoader.ClientConfig?.ShowCustomTorsoMesh ?? true);
 
 
@@ -661,7 +697,7 @@ namespace CompetitivePuckTweaks.src
         {
             try
             {
-                bool useCustom = DashFallMod.ConfigManager.CompAdjust?.EnableCustomSkaterTorsoModel == true;
+                bool useCustom = DashFallMod.ConfigManager.CompAdjustEffective?.EnableCustomSkaterTorsoModel == true;
                 var playerMeshField = typeof(PlayerBodyV2).GetField("playerMesh",
                     BindingFlags.NonPublic | BindingFlags.Instance);
 

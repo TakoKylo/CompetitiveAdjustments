@@ -89,7 +89,7 @@ namespace CompetitivePuckTweaks.src
 
             bool isGoalie = __instance.name.Contains("Goalie");
             bool useCustomCollider = !isGoalie
-                && DashFallMod.ConfigManager.CompAdjust.EnableCustomSkaterTorsoModel
+                && DashFallMod.ConfigManager.CompAdjustEffective.EnableCustomSkaterTorsoModel
                 && PluginCore.torsoMesh != null;
 
             // SmallerModels goalie groin offset

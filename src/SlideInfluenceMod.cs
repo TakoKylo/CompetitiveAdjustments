@@ -44,15 +44,14 @@ namespace DashFallMod
                 return;
             }
             
-            // Tick GoalieDashExtend once per frame (not once per player body)
+            // Ensure CMM handlers are registered once per frame (not once per
+            // player body). On dedicated servers DashFallClientRunner doesn't
+            // exist, so without this poll _cmm stays null and NotifyClients
+            // silently drops all messages to clients.
             int currentFrame = Time.frameCount;
             if (_lastTickFrame != currentFrame)
             {
                 _lastTickFrame = currentFrame;
-                GoalieDashExtend.Tick();
-                // On dedicated servers, DashFallClientRunner doesn't exist so
-                // EnsureCMMRegistered is never called — _cmm stays null and
-                // NotifyClients silently drops all messages to clients.
                 GoalieDashExtend.EnsureCMMRegistered();
                 Stances.EnsureCMMRegistered();
             }

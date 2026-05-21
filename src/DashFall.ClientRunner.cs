@@ -125,6 +125,12 @@ namespace DashFallMod.Client
             // server (which may be vanilla), RefreshAll() doesn't re-apply the old
             // server's EnableArenaTweaks=true via _hasSyncedTweaks.
             GoalNetTweaks.ClearSyncedTweaks();
+            // Drop per-body InstanceID-keyed state. PlayerBodyV2.OnNetworkDespawn
+            // normally clears these per-player on disconnect, but a hard session
+            // teardown skips OnNetworkDespawn and these IDs are never reused
+            // across Unity sessions anyway, so wipe the slates to be safe.
+            try { Stances.ClearAll(); } catch (Exception e) { ConfigManager.Dbg("Stances.ClearAll failed: " + e.Message); }
+            try { GoalieDashExtend.ClearAll(); } catch (Exception e) { ConfigManager.Dbg("GoalieDashExtend.ClearAll failed: " + e.Message); }
         }
 
         /// <summary>Re-applies or resets the minimap scale immediately. Call after toggling EnableMinimapTweaks.</summary>
@@ -168,15 +174,17 @@ namespace DashFallMod.Client
                 return;
             }
 
-            var cfg = CompetitiveAdjustments.ConfigManager.Config?.CompAdjust;
-            if (cfg == null || !cfg.EnableArenaTweaks)
+            // Pull the arena scale from the effective source: local config when hosting,
+            // synced values when joined to a modded server, or "vanilla rink" (returns
+            // false) when joined to a vanilla server.  Without this gate the local
+            // config was applied to vanilla servers, stretching the minimap to match
+            // an arena that does not exist on that server.
+            if (!GoalNetTweaks.TryGetEffectiveArenaScale(out float scaleX, out float scaleY))
             {
                 ResetMinimapScale();
                 return;
             }
 
-            float scaleX = cfg.ArenaScaleX > 0f ? cfg.ArenaScaleX : 1f;
-            float scaleY = cfg.ArenaScaleY > 0f ? cfg.ArenaScaleY : 1f;
             if (Mathf.Approximately(scaleX, 1f) && Mathf.Approximately(scaleY, 1f))
             {
                 ResetMinimapScale();
@@ -238,7 +246,7 @@ namespace DashFallMod.Client
                 PonceMods.Shared.ModMenuHub.UnregisterMod("DashFall");
                 ConfigManager.Dbg("OnDisable - unregistered from ModMenuHub");
             }
-            catch { }
+            catch (Exception e) { ConfigManager.Dbg("OnDisable failed: " + e.Message); }
         }
 
         void OnDestroy()
@@ -250,13 +258,13 @@ namespace DashFallMod.Client
                 if (Unity.Netcode.NetworkManager.Singleton != null)
                     Unity.Netcode.NetworkManager.Singleton.OnClientStopped -= OnClientStopped;
                 DashFallMod.GoalNetTweaks.OnTweaksSynced -= OnTweaksSynced;
-                
+
                 // CleanupHUD(); //TODO: Re-enable when HUD is ready
-                
+
                 _dfPanel?.RemoveFromHierarchy();
                 _dfBackdrop?.RemoveFromHierarchy();
                 _captureOverlay?.RemoveFromHierarchy();
-                
+
                 // Unregister from ModMenuHub
                 PonceMods.Shared.ModMenuHub.UnregisterMod("DashFall");
                 PonceMods.Shared.ModMenuHub.Cleanup("DashFall");
@@ -266,7 +274,7 @@ namespace DashFallMod.Client
                 _captureOverlay = null;
                 _buttonsWiredForThisRoot = false;
             }
-            catch { }
+            catch (Exception e) { ConfigManager.Dbg("OnDestroy failed: " + e.Message); }
 
             ClearInputActions();
         }
@@ -307,8 +315,7 @@ namespace DashFallMod.Client
                 // Fire HOLD actions repeatedly while held
                 UpdateHoldActions();
                 
-                // Tick the dash extend timer system and ensure CMM handlers are registered
-                GoalieDashExtend.Tick();
+                // Ensure CMM handlers are registered (idempotent no-ops once bound).
                 GoalieDashExtend.EnsureCMMRegistered();
                 Stances.EnsureCMMRegistered();
                 

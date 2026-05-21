@@ -26,18 +26,18 @@ namespace CompetitivePuckTweaks.src {
                 // stamina values. Overwriting them on goalies forces them to skater values
                 // (notably dashStaminaDrain), which makes goalie dashes cost less than base game.
                 if (__instance.name.ToLower().Contains("goalie")) {
-                    staminaRegenerationRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.GoalieStaminaRegenerationRate);
-                    sprintStaminaDrainRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.GoalieSprintStaminaDrainRate);
-                    jumpStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.GoalieJumpStaminaDrain);
-                    twistStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.GoalieTwistStaminaDrain);
-                    dashStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.GoalieDashStaminaDrain);
+                    staminaRegenerationRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.CompTweaksEffective.GoalieStaminaRegenerationRate);
+                    sprintStaminaDrainRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.CompTweaksEffective.GoalieSprintStaminaDrainRate);
+                    jumpStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.CompTweaksEffective.GoalieJumpStaminaDrain);
+                    twistStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.CompTweaksEffective.GoalieTwistStaminaDrain);
+                    dashStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.CompTweaksEffective.GoalieDashStaminaDrain);
                 }
                 else {
-                    staminaRegenerationRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.StaminaRegenerationRate);
-                    sprintStaminaDrainRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRate);
-                    jumpStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.JumpStaminaDrain);
-                    twistStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.TwistStaminaDrain);
-                    dashStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.Config.CompTweaks.DashStaminaDrain);
+                    staminaRegenerationRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.CompTweaksEffective.StaminaRegenerationRate);
+                    sprintStaminaDrainRateField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.CompTweaksEffective.SprintStaminaDrainRate);
+                    jumpStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.CompTweaksEffective.JumpStaminaDrain);
+                    twistStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.CompTweaksEffective.TwistStaminaDrain);
+                    dashStaminaDrainField?.SetValue(__instance, CompetitiveAdjustments.ConfigManager.CompTweaksEffective.DashStaminaDrain);
                 }
 
                 CompetitiveAdjustments.ConfigManager.Dbg($"Adjusted stamina related values on PlayerBody {__instance.name}");
@@ -62,9 +62,9 @@ namespace CompetitivePuckTweaks.src {
                     frame++;
                     if (frame % 2 == 0) {
                         if (__instance.name.ToLower().Contains("goalie"))
-                            __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.Config.CompTweaks.GoalieSprintStaminaDrainRateOffset * 2;
+                            __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.CompTweaksEffective.GoalieSprintStaminaDrainRateOffset * 2;
                         else
-                            __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.Config.CompTweaks.SprintStaminaDrainRateOffset * 2;
+                            __instance.Stamina.Value += Time.fixedDeltaTime * CompetitiveAdjustments.ConfigManager.CompTweaksEffective.SprintStaminaDrainRateOffset * 2;
                     }
                 }
                 else
