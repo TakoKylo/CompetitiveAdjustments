@@ -272,40 +272,24 @@ namespace CompetitivePuckTweaks.src
         }
     }
 
-    [HarmonyPatch(typeof(PuckManager), "Server_SpawnPucksForPhase")]
+    [HarmonyPatch(typeof(PuckManager), nameof(PuckManager.Server_SpawnPucksForPhase))]
     public class PuckManagerPatch
     {
-        [HarmonyPrefix]
-        public static bool Prefix(PuckManager __instance, GamePhase phase)
-        {
-            // Safety: if anything goes wrong here, let vanilla spawning continue.
-            try
-            {
-                if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
-                {
-                    return true;
-                }
+        [HarmonyPostfix]
+        public static void Postfix(PuckManager __instance, GamePhase phase) {
+            try {
+                if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer || !PluginCore.config.RandomPuckDrop)
+                    return;
 
                 // Only override Play phase puck spawn; keep all other phases vanilla.
-                if (phase == GamePhase.Play)
-                {
-                    Debug.Log("[PuckManager] Spawning 1 puck for phase Play");
-                    __instance.Server_SpawnPuck(
-                        new Vector3(0, UnityEngine.Random.Range(2f, 3f), 0),
-                        Quaternion.Euler(
-                            UnityEngine.Random.Range(0f, 30f),
-                            UnityEngine.Random.Range(0f, 30f),
-                            UnityEngine.Random.Range(0f, 30f)),
-                        false);
-                    return false;
+                if (phase == GamePhase.Play) {
+                    foreach (Puck puck in __instance.GetPucks())
+                        puck.Rigidbody.AddForce(Vector3.down * UnityEngine.Random.Range(0.5f, 2f), ForceMode.Force); // TODO : Test and adjust random force.
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[PuckManagerPatch] Failed in Server_SpawnPucksForPhase prefix: {ex}");
+            catch (Exception ex) {
+                Debug.LogError($"[PuckManagerPatch] Failed in Server_SpawnPucksForPhase Postfix: {ex}");
             }
-
-            return true;
         }
     }
 
