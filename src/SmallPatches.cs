@@ -282,7 +282,7 @@ namespace CompetitivePuckTweaks.src
                 // Only override Play phase puck spawn; keep all other phases vanilla.
                 if (phase == GamePhase.Play) {
                     foreach (Puck puck in __instance.GetPucks())
-                        puck.Rigidbody.AddForce(Vector3.down * UnityEngine.Random.Range(0.5f, 2f), ForceMode.Force); // TODO : Test and adjust random force.
+                        puck.Rigidbody.AddForce(Vector3.down * UnityEngine.Random.Range(5.5f, 9f), ForceMode.VelocityChange);
                 }
             }
             catch (Exception ex) {
