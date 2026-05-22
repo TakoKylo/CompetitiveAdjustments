@@ -403,7 +403,7 @@ namespace CompetitivePuckTweaks.src
             var chatMgr = NetworkBehaviourSingleton<ChatManager>.Instance;
             if (chatMgr != null)
             {
-                chatMgr.Server_SendChatMessageToClients(message, new ulong[] { clientId });
+                chatMgr.Server_SendChatMessage(message, "#b8b8b8", clientId);
             }
         }
 
