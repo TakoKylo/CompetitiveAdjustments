@@ -9,7 +9,10 @@ namespace CompetitivePuckTweaks.src
         [HarmonyPostfix]
         public static void Postfix(Stick __instance, ref GameObject ___shaftHandle, ref float ___shaftHandleProportionalGain)
         {
-            if (__instance == null) { Debug.LogError($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] Stick null on network post spawn"); return; }
+            if (__instance == null) {
+                PluginCore.LogError($"Stick null on network post spawn");
+                return;
+            }
 
             ___shaftHandleProportionalGain = PluginCore.config.ShaftHandleProportionalGain;
 
