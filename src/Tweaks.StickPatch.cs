@@ -20,7 +20,10 @@ namespace CompetitivePuckTweaks.src
 
             StickMesh newStickMesh = __instance.gameObject.GetComponentInChildren<StickMesh>();
 
-            if (newStickMesh == null) { PluginCore.Log($"StickMesh is null!"); return; }
+            if (newStickMesh == null) {
+                PluginCore.LogError($"StickMesh is null!");
+                return;
+            }
 
             // find meshcolliders
             MeshCollider[] newMeshColliders = newStickMesh.transform.GetComponentsInChildren<MeshCollider>();
@@ -61,7 +64,8 @@ namespace CompetitivePuckTweaks.src
                 }
             }
 
-            if (PluginCore.config.DisableShaftCollision == false) return;
+            if (!PluginCore.config.DisableShaftCollision)
+                return;
 
             if (PluginCore.config.EnableMidStickCollider)
             {
