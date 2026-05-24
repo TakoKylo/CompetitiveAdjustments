@@ -1,4 +1,5 @@
 using HarmonyLib;
+using System;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -65,14 +66,11 @@ namespace CompetitivePuckTweaks.src
         [HarmonyPostfix]
         public static void Postfix(PlayerBodyV2 __instance, ref float ___slideTurnMultiplier,
          ref float ___stopDrag, ref float ___balanceRecoveryTime, ref PlayerMesh ___playerMesh, ref float ___slideDrag, ref float ___tackleForceMultiplier,
-         ref float ___tackleForceThreshold, ref float ___tackleSpeedThreshold)
-        {
+         ref float ___tackleForceThreshold, ref float ___tackleSpeedThreshold) {
             if (__instance.Player.IsReplay.Value) return;
 
-            if (GameManager.Instance.Phase == GamePhase.FaceOff)
-            {
-                if (__instance.Player.PlayerPosition.Name == "C")
-                {
+            if (GameManager.Instance.Phase == GamePhase.FaceOff) {
+                if (__instance.Player.PlayerPosition.Name == "C") {
                     if (__instance.Player.Team == PlayerTeam.Blue) __instance.transform.position += new UnityEngine.Vector3(0, 0, PluginCore.config.CenterSpawnOffset);
                     else __instance.transform.position -= new UnityEngine.Vector3(0, 0, PluginCore.config.CenterSpawnOffset);
                 }
@@ -96,33 +94,28 @@ namespace CompetitivePuckTweaks.src
             if (isGoalie && PluginCore.config.EnableSmallerModels)
                 ___playerMesh.PlayerGroin.transform.localPosition += new Vector3(0, 0.1f, 0);
 
-            if (!isGoalie)
-            {
+            if (!isGoalie) {
                 var mf = ___playerMesh.PlayerTorso.GetComponentInChildren<MeshFilter>();
                 var mc = ___playerMesh.PlayerTorso.GetComponentInChildren<MeshCollider>();
 
                 // Save originals so RefreshPlayerTorsoStates can restore them.
-                if (mf != null)
-                {
+                if (mf != null) {
                     int mfId = mf.GetInstanceID();
                     if (!PluginCore.OriginalTorsoMeshes.ContainsKey(mfId))
                         PluginCore.OriginalTorsoMeshes[mfId] = mf.sharedMesh;
                 }
 
                 // ── COLLIDER — server config (EnableCustomSkaterTorsoModel) only ────────
-                if (mc != null)
-                {
+                if (mc != null) {
                     int mcId = mc.GetInstanceID();
                     if (!PluginCore.OriginalTorsoColliderMeshes.ContainsKey(mcId))
                         PluginCore.OriginalTorsoColliderMeshes[mcId] = mc.sharedMesh;
                     if (!PluginCore.OriginalTorsoColliderLayers.ContainsKey(mcId))
                         PluginCore.OriginalTorsoColliderLayers[mcId] = mc.gameObject.layer;
 
-                    if (useCustomCollider)
-                    {
+                    if (useCustomCollider) {
                         var colliderMesh = PluginCore.GetOrBuildScaledColliderMesh();
-                        if (colliderMesh != null)
-                        {
+                        if (colliderMesh != null) {
                             mc.convex = true;
                             mc.isTrigger = false;
                             mc.sharedMesh = colliderMesh;
@@ -132,23 +125,22 @@ namespace CompetitivePuckTweaks.src
                             // (Layer remains unchanged from game default)
                             mc.enabled = false;
                             mc.enabled = true;
-                            PluginCore.Log($"[TorsoApply] Custom collider. convex={mc.convex} layer={mc.gameObject.layer} bounds={mc.bounds}");
+                            PluginCore.Dbg($"[TorsoApply] Custom collider. convex={mc.convex} layer={mc.gameObject.layer} bounds={mc.bounds}");
                             TorsoDebugBrush.Sync(mc);
                         }
                         else
-                            PluginCore.Log($"[TorsoApply] Custom collider skipped (readable={PluginCore.torsoMesh.isReadable}).");
+                            PluginCore.Dbg($"[TorsoApply] Custom collider skipped (readable={PluginCore.torsoMesh.isReadable}).");
                     }
                     // If !useCustomCollider: original collider stays — nothing to do at spawn time.
                 }
                 else
-                    PluginCore.Log($"[TorsoApply] No MeshCollider on PlayerTorso. children={string.Join(", ", System.Linq.Enumerable.Select(___playerMesh.PlayerTorso.GetComponentsInChildren<Collider>(true), c => c.GetType().Name + ":" + c.name))}");
+                    PluginCore.Dbg($"[TorsoApply] No MeshCollider on PlayerTorso. children={string.Join(", ", System.Linq.Enumerable.Select(___playerMesh.PlayerTorso.GetComponentsInChildren<Collider>(true), c => c.GetType().Name + ":" + c.name))}");
 
                 // ── VISUAL — handled by CompetitiveCompanion.PlayerBodyPatch (client config) ──
                 // The game's MeshRendererHider (Event_OnPlayerCameraEnabled) hides the local player's
                 // own body automatically — we must never touch mr.enabled here.
 
-                if (PluginCore.config.EnableSmallerModels)
-                {
+                if (PluginCore.config.EnableSmallerModels) {
                     ___playerMesh.PlayerTorso.transform.localPosition += new Vector3(0, 0.27f, 0);
                     ___playerMesh.PlayerGroin.GetComponentInChildren<MeshFilter>().mesh = PluginCore.groinMesh;
                     ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>().sharedMesh = PluginCore.groinMesh;
@@ -160,31 +152,27 @@ namespace CompetitivePuckTweaks.src
             ___playerMesh.PlayerHead.GetComponentInChildren<SphereCollider>().material.bounciness = PluginCore.config.PlayerColliderBounciness;
 
             if (isGoalie) return;
-            
-            if (PluginCore.config.EnablePuckThroughBodies && !__instance.Player.IsReplay.Value)
-            {
+
+            if (PluginCore.config.EnablePuckThroughBodies && !__instance.Player.IsReplay.Value) {
                 ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>().excludeLayers |= (1 << LayerMask.NameToLayer("Puck"));
                 ___playerMesh.PlayerTorso.GetComponentInChildren<MeshCollider>().excludeLayers |= (1 << LayerMask.NameToLayer("Puck"));
                 ___playerMesh.PlayerHead.GetComponentInChildren<SphereCollider>().excludeLayers |= (1 << LayerMask.NameToLayer("Puck"));
             }
 
-            if (PluginCore.config.EnablePuckThroughGroin && !__instance.Player.IsReplay.Value)
-            {
+            if (PluginCore.config.EnablePuckThroughGroin && !__instance.Player.IsReplay.Value) {
                 ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>().excludeLayers |= (1 << LayerMask.NameToLayer("Puck"));
             }
 
             ___slideDrag = PluginCore.config.SlideDrag;
 
-            if (PluginCore.config.ThinSkaterBodies)
-            {
+            if (PluginCore.config.ThinSkaterBodies) {
                 // Multiply against the prefab's baseline scale rather than overwriting it.
                 // b897 prefabs ship PlayerTorso/PlayerGroin at (0.4, 0.4, 0.4); the pre-b897
                 // assignment-based form blew the body up to (factor, 1, factor) which made the
                 // stick get stuck on the oversized torso.
                 float factor = PluginCore.config.SkaterThinningFactor;
                 var groinMc = ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>();
-                if (groinMc != null)
-                {
+                if (groinMc != null) {
                     var s = groinMc.transform.localScale;
                     groinMc.transform.localScale = new Vector3(s.x * factor, s.y, s.z * factor);
                 }
@@ -192,17 +180,14 @@ namespace CompetitivePuckTweaks.src
                 // child transform, which was already set to 100x scale to correct the Blender export unit
                 // mismatch.  Applying ThinSkaterBodies here would overwrite that scale, making the mesh
                 // invisible.  Skip torso thinning in that case — the custom shape defines its own width.
-                if (!useCustomCollider)
-                {
+                if (!useCustomCollider) {
                     var torsoMc = ___playerMesh.PlayerTorso.GetComponentInChildren<MeshCollider>();
-                    if (torsoMc != null)
-                    {
+                    if (torsoMc != null) {
                         var s = torsoMc.transform.localScale;
                         torsoMc.transform.localScale = new Vector3(s.x * factor, s.y, s.z * factor);
                     }
                 }
             }
-            
         }
     }
 

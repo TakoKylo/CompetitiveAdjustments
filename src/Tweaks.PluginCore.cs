@@ -428,6 +428,14 @@ namespace CompetitivePuckTweaks.src
             Debug.Log($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] " + message);
         }
 
+        /// <summary>
+        /// Logs a message formatted with mod name
+        /// </summary>
+        /// <param name="message">Message to be logged</param>
+        public static void LogError(string message) {
+            Debug.LogError($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] " + message);
+        }
+
         public static void Dbg(string message) {
             if (CompetitiveAdjustments.ConfigManager.Config.Dashfall.EnableDebugLogs)
                 Log(message);
