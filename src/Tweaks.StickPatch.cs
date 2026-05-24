@@ -69,7 +69,6 @@ namespace CompetitivePuckTweaks.src
 
             if (PluginCore.config.EnableMidStickCollider)
             {
-
                 boxCollider = __instance.gameObject.AddComponent<BoxCollider>();
                 boxCollider.size = new UnityEngine.Vector3(0.029f, 0.14f, 1.21f);
                 boxCollider.center += new UnityEngine.Vector3(0, 0, 0.145f);
