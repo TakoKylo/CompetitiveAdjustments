@@ -177,13 +177,30 @@ namespace CompetitivePuckTweaks.src
 
             if (PluginCore.config.ThinSkaterBodies)
             {
-                ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>().transform.localScale = new Vector3(PluginCore.config.SkaterThinningFactor, 1, PluginCore.config.SkaterThinningFactor);
+                // Multiply against the prefab's baseline scale rather than overwriting it.
+                // b897 prefabs ship PlayerTorso/PlayerGroin at (0.4, 0.4, 0.4); the pre-b897
+                // assignment-based form blew the body up to (factor, 1, factor) which made the
+                // stick get stuck on the oversized torso.
+                float factor = PluginCore.config.SkaterThinningFactor;
+                var groinMc = ___playerMesh.PlayerGroin.GetComponentInChildren<MeshCollider>();
+                if (groinMc != null)
+                {
+                    var s = groinMc.transform.localScale;
+                    groinMc.transform.localScale = new Vector3(s.x * factor, s.y, s.z * factor);
+                }
                 // When a custom torso model is active its MeshFilter and MeshCollider share the same
                 // child transform, which was already set to 100x scale to correct the Blender export unit
                 // mismatch.  Applying ThinSkaterBodies here would overwrite that scale, making the mesh
                 // invisible.  Skip torso thinning in that case — the custom shape defines its own width.
                 if (!useCustomCollider)
-                    ___playerMesh.PlayerTorso.GetComponentInChildren<MeshCollider>().transform.localScale = new Vector3(PluginCore.config.SkaterThinningFactor, 1, PluginCore.config.SkaterThinningFactor);
+                {
+                    var torsoMc = ___playerMesh.PlayerTorso.GetComponentInChildren<MeshCollider>();
+                    if (torsoMc != null)
+                    {
+                        var s = torsoMc.transform.localScale;
+                        torsoMc.transform.localScale = new Vector3(s.x * factor, s.y, s.z * factor);
+                    }
+                }
             }
             
         }
