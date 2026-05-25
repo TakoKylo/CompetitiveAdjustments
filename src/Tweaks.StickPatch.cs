@@ -9,7 +9,10 @@ namespace CompetitivePuckTweaks.src
         [HarmonyPostfix]
         public static void Postfix(Stick __instance, ref GameObject ___shaftHandle, ref float ___shaftHandleProportionalGain)
         {
-            if (__instance == null) { Debug.LogError($"[{CompetitiveAdjustments.SharedConstants.MOD_NAME}] Stick null on network post spawn"); return; }
+            if (__instance == null) {
+                PluginCore.LogError($"Stick null on network post spawn");
+                return;
+            }
 
             ___shaftHandleProportionalGain = PluginCore.config.ShaftHandleProportionalGain;
 
@@ -17,7 +20,10 @@ namespace CompetitivePuckTweaks.src
 
             StickMesh newStickMesh = __instance.gameObject.GetComponentInChildren<StickMesh>();
 
-            if (newStickMesh == null) { PluginCore.Log($"StickMesh is null!"); return; }
+            if (newStickMesh == null) {
+                PluginCore.LogError($"StickMesh is null!");
+                return;
+            }
 
             // find meshcolliders
             MeshCollider[] newMeshColliders = newStickMesh.transform.GetComponentsInChildren<MeshCollider>();
@@ -32,37 +38,23 @@ namespace CompetitivePuckTweaks.src
 
             // Own-body ignore: runs regardless of DisableShaftCollision.
             // Layer 6-8 is enabled globally when StickBodyCollision is on; this prevents self-hit.
-            if (CompetitiveAdjustments.ConfigManager.CompAdjustEffective?.StickBodyCollision == true)
-            {
-                Player owner = null;
-                foreach (var p in UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None))
-                {
-                    if (p?.Stick == __instance) { owner = p; break; }
-                }
-                if (owner != null)
-                {
-                    PlayerBodyV2 ownerBody = null;
-                    foreach (var b in UnityEngine.Object.FindObjectsByType<PlayerBodyV2>(FindObjectsSortMode.None))
-                    {
-                        if (b.Player == owner) { ownerBody = b; break; }
-                    }
-                    if (ownerBody != null)
-                    {
-                        var stickCols = __instance.GetComponentsInChildren<Collider>();
-                        var bodyCols  = ownerBody.GetComponentsInChildren<Collider>();
-                        foreach (var sc in stickCols)
-                            foreach (var bc in bodyCols)
-                                if (sc != null && bc != null)
-                                    Physics.IgnoreCollision(sc, bc, true);
+            if (CompetitiveAdjustments.ConfigManager.CompAdjustEffective?.StickBodyCollision == true) {
+                var stickCols = __instance.GetComponentsInChildren<Collider>();
+                var bodyCols  = __instance.PlayerBody.GetComponentsInChildren<Collider>();
+
+                foreach (var sc in stickCols) {
+                    foreach (var bc in bodyCols) {
+                        if (sc != null && bc != null)
+                            Physics.IgnoreCollision(sc, bc, true);
                     }
                 }
             }
 
-            if (PluginCore.config.DisableShaftCollision == false) return;
+            if (!PluginCore.config.DisableShaftCollision)
+                return;
 
             if (PluginCore.config.EnableMidStickCollider)
             {
-
                 boxCollider = __instance.gameObject.AddComponent<BoxCollider>();
                 boxCollider.size = new UnityEngine.Vector3(0.029f, 0.14f, 1.21f);
                 boxCollider.center += new UnityEngine.Vector3(0, 0, 0.145f);
@@ -118,7 +110,7 @@ namespace CompetitivePuckTweaks.src
                     }
                 }
 
-                PluginCore.Log($"Collision ignorance updated.");
+                PluginCore.Dbg($"Collision ignorance updated.");
             }
         }
     }
